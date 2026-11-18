@@ -773,7 +773,7 @@
         "</div></div>" +
         (proTab && proOn ? '<div class="mn-sheet" data-html2canvas-ignore id="mn-pro" role="dialog" aria-modal="true" aria-label="PRO" hidden><div class="mn-inner">' +
           '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
-          '<div class="mn-group">' + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
+          '<div class="mn-group">' + item("proall", { ko: "PRO 전체", en: "All PRO" }, "", false, { ko: "세 폴더의 지금 신호 한눈에", en: "Every PRO signal at a glance" }) + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") + "</div></div></div>" : "");
     }
