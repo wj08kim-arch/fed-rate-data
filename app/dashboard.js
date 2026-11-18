@@ -958,7 +958,9 @@
       (stale ? '<p class="note warn">' + t({ ko: "한국은행 ECOS 키가 아직 없어 물가 자료가 " + p.inflation_asof + "까지입니다. 그래서 '지금' 신호도 그 시점 기준입니다. 키를 넣으면 최신으로 바뀝니다.",
         en: "No Bank of Korea ECOS key yet, so inflation data stops at " + p.inflation_asof + " and the 'now' signals are as of then. Adding the key brings them up to date." }) + "</p>" : "") +
       '<section class="card ours"><div class="ours-top"><div><div class="eyebrow">' + t(UI.ours) + "</div>" +
-      '<div class="ours-sig">' + chip(o.now.signal) + '<span class="ours-agree">' + t(UI.agree, { a: o.now.agree, n: o.now.total }) + "</span></div>" +
+      '<div class="ours-sig">' + chip(o.now.signal) + (sigGrade(p) ? sigGrade(p).html : "") + '<span class="ours-agree">' + t(UI.agree, { a: o.now.agree, n: o.now.total }) + "</span></div>" +
+      (sigGrade(p) ? '<p class="note">' + sigGrade(p).why + "</p>" : "") +
+      methodNote(p) +
       '<p class="sub">' + t(UI.oursSub, { n: n }) + "</p></div></div>" +
       '<div class="tbl"><table class="cmp"><thead><tr><th></th><th class="n">' + t(UI.colAll) + '</th><th class="n">' + t(UI.colRecent) + "</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
       '<p class="note">' + howScoredTxt(p) + "<br>" + honestNote(p) + "</p>" + oursAbout(p) + "</section>" +
@@ -994,6 +996,36 @@
 
   // 지금과 가장 비슷했던 과거 (analogs.py)
   // PRO 전체: 세 폴더의 지금 신호를 한 화면에 (각 줄을 누르면 그 폴더로)
+  // 신호 신뢰도: 최근 10년 '우리 공식' 적중률이 단순 기준(항상 동결/보합·항상 상승)보다 얼마나 나은지,
+  // (자산·환율) 과거 같은 신호 뒤 실제로 그 방향으로 간 비율이 평소보다 높은지로 강함·보통·약함을 매긴다.
+  function sigGrade(p) {
+    if (!p || !p.ours || !p.ours.score_recent) return null;
+    var hr = p.ours.score_recent.hit, bases = [p.always_hold, p.always_up].filter(Boolean).map(function (b) { return (b.score_recent || {}).hit; }).filter(function (v) { return v != null; });
+    if (hr == null || !bases.length) return null;
+    var edge = hr - Math.max.apply(null, bases), o = p.outlook, lift = null, n = null;
+    if (o && o.same && o.all && o.signal != null) {
+      var key = o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat";
+      lift = o.same[key] - o.all[key]; n = o.same.n;
+    }
+    var lv = edge >= 0.05 && (lift == null || (lift >= 0.05 && n >= 30)) ? "strong" : (edge < 0 || (lift != null && (lift < 0 || n < 20))) ? "weak" : "mid";
+    var L = { strong: { ko: "신뢰 높음", en: "Strong" }, mid: { ko: "신뢰 보통", en: "Moderate" }, weak: { ko: "참고용", en: "Weak" } }[lv];
+    var why = t({ ko: "최근 10년 적중 " + pct(hr) + " (단순 기준보다 " + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "%p)" + (lift != null ? " · 같은 신호 뒤 그 방향 " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " (평소 " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : ""),
+                  en: "Last 10y hit " + pct(hr) + " (" + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "pp vs. naive)" + (lift != null ? " · went that way " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " after this signal (usually " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : "") });
+    return { lv: lv, html: '<span class="grade g-' + lv + '"' + tipAttr(L.ko + " · " + why, L.en + " · " + why) + ">" + t(L) + "</span>", why: why };
+  }
+  // 결합 방법(선택기): 매달 그때까지 가장 잘 맞힌 방법을 자동으로 고른다 (combine.py)
+  function methodNote(p) {
+    var m = p && p.ours && p.ours.method;
+    if (!m) return "";
+    return '<p class="note">' + t({ ko: "지금 결합 방법: <b>" + m.name.ko + "</b> — 매달, 최근 10년 동안 가장 잘 맞힌 방법(가중 투표·과반 동의·최고 공식·로지스틱 회귀·항상 보합 등)을 그때까지의 정보만으로 자동 선택합니다.",
+      en: "Current method: <b>" + m.name.en + "</b> — each month we pick whichever approach (weighted vote, consensus, best formula, logistic regression, always flat…) did best over the past 10 years, using only information available then." }) + "</p>";
+  }
+  // 약한 신호는 한 단어 대신 과거 확률로
+  function probLine(p) {
+    var o = p.outlook;
+    if (!o || !o.same) return "";
+    return t({ ko: "상승 " + pct(o.same.up) + " · 보합 " + pct(o.same.flat) + " · 하락 " + pct(o.same.down), en: "Rise " + pct(o.same.up) + " · flat " + pct(o.same.flat) + " · fall " + pct(o.same.down) });
+  }
   function proAllView() {
     var row = function (go, name, chipHtml, right, sub) {
       return '<button type="button" class="pa-row" data-go="' + go + '"><span class="pa-l"><span class="pa-nm">' + t(name) + "</span>" +
@@ -1013,18 +1045,21 @@
     var nameOf = {}; REGIONS.forEach(function (x) { nameOf[x[0]] = x[1]; });
     var econ = regs.map(function (x) {
       var o = x[1].ours, n = o.now;
-      return row("pro:" + x[0], nameOf[x[0]], chip(n.signal, x[0] === "sg"),
-        t({ ko: n.total + "개 중 " + n.agree + "개 동의", en: n.agree + " of " + n.total + " agree" }), hit(o.score_recent || o.score) + (n.asof ? " · " + esc(n.asof) : ""));
+      var g = sigGrade(x[1]);
+      return row("pro:" + x[0], nameOf[x[0]], '<span class="' + (g && g.lv === "weak" ? "dim" : "") + '">' + chip(n.signal, x[0] === "sg") + "</span>" + (g ? g.html : ""),
+        "", t({ ko: n.total + "개 중 " + n.agree + "개 동의", en: n.agree + " of " + n.total + " agree" }) + " · " + hit(o.score_recent || o.score) + (n.asof ? " · " + esc(n.asof) : ""));
     }).join("");
     // 2) 자산 6개월 전망
     var assets = ["au", "ol", "sp"].filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
-      var a = pro[k];
-      return row("assets:" + k, a.meta.name, chip(a.ours.now.signal, "asset"), dirProb(a), hit(a.ours.score_recent || a.ours.score));
+      var a = pro[k], g = sigGrade(a), weak = g && g.lv === "weak";
+      return row("assets:" + k, a.meta.name, weak ? (g ? g.html : "") : chip(a.ours.now.signal, "asset") + (g ? g.html : ""),
+        "", weak ? probLine(a) : dirProb(a) + " · " + hit(a.ours.score_recent || a.ours.score));
     }).join("");
     // 3) 환율 6개월 전망
     var fxs = FX_PAIRS.filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
-      var a = pro[k];
-      return row("fxpro:" + k, a.meta.name, chip(a.ours.now.signal, "asset"), dirProb(a), hit(a.ours.score_recent || a.ours.score));
+      var a = pro[k], g = sigGrade(a), weak = g && g.lv === "weak";
+      return row("fxpro:" + k, a.meta.name, weak ? (g ? g.html : "") : chip(a.ours.now.signal, "asset") + (g ? g.html : ""),
+        "", weak ? probLine(a) : dirProb(a) + " · " + hit(a.ours.score_recent || a.ours.score));
     }).join("");
     // 4) 비슷했던 과거
     var an = pro.analogs, anH = "";
@@ -1043,8 +1078,8 @@
             en: "Most hawkish " + hk.name + " (" + sg(hk.tone) + ")" + (ms.length > 1 ? " · most dovish " + dv.name + " (" + sg(dv.tone) + ")" : "") }));
     }
     var card = function (title, sub, body) { return body ? '<section class="card"><h2>' + t(title) + '</h2>' + (sub ? '<p class="sub">' + t(sub) + "</p>" : "") + '<div class="pa-list">' + body + "</div></section>" : ""; };
-    return card({ ko: "경제학자 신호", en: "Economist signals" }, { ko: "나라마다 유명 경제학자 금리 공식들을 합친 '우리 공식'이 지금 가리키는 방향입니다. 적중률은 최근 기간 기준입니다.", en: "Where our blend of famous economists' rate formulas points now, by country. Hit rates are for the recent period." }, econ) +
-      card({ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, { ko: "'그대로 간 비율'은 과거에 지금과 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향(상승·보합·하락)이었던 비율입니다.", en: "'Went that way' = share of past cases with today's signal where the price actually did that over six months." }, assets) +
+    return card({ ko: "경제학자 신호", en: "Economist signals" }, { ko: "나라마다 유명 경제학자 금리 공식들을 합친 '우리 공식'이 지금 가리키는 방향입니다. 신뢰도는 최근 10년 적중률이 '항상 동결'처럼 단순한 방법보다 얼마나 나은지로 매깁니다.", en: "Where our blend of famous economists' rate formulas points now. Confidence = how much its last-10-year hit rate beats a naive call like 'always hold'." }, econ) +
+      card({ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, { ko: "'그대로 간 비율'은 과거에 지금과 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향이었던 비율입니다. '참고용' 신호는 한 방향 대신 과거 확률(상승·보합·하락)을 보여 줍니다.", en: "'Went that way' = share of past cases with today's signal that actually did that over six months. Weak signals show past odds (rise/flat/fall) instead of one call." }, assets) +
       card({ ko: "환율 6개월 전망", en: "Currencies: six-month outlook" }, { ko: "'상승'은 각 통화쌍 숫자가 오른다는 뜻입니다 (예: 원/달러 상승 = 원화 약세).", en: "'Rise' means the quoted number goes up (e.g. USD/KRW up = weaker won)." }, fxs) +
       card({ ko: "미국 참고", en: "US extras" }, null, anH + mH) +
       "<footer><p>" + proDisc() + "</p><p>" + t(UI.disc1) + "</p></footer>";
@@ -1946,12 +1981,13 @@
       (p.pair ? pairSwitch() : assetSwitch()) +
       '<section class="card hero"><div class="eyebrow">' + t(me.name) + " · " + priceAsof + "</div>" +
       '<div class="big"><b>' + num(priceNow, me.digits) + '</b><span>' + t(me.unit) + " · " + t({ ko: "1년 " + pctTxt(s.chg["1y"]) + " · 5년 " + pctTxt(s.chg["5y"]) + " (월평균 기준)", en: "1y " + pctTxt(s.chg["1y"]) + " · 5y " + pctTxt(s.chg["5y"]) + " (monthly avg)" }) + "</span></div>" +
-      '<div class="range">' + t({ ko: "6개월 전망 (우리 공식): ", en: "6-month outlook (our blend): " }) + chip(p.ours.now.signal, "asset") + " " + t(UI.agree, { a: p.ours.now.agree, n: p.ours.now.total }) + "</div>" +
+      '<div class="range">' + t({ ko: "6개월 전망 (우리 공식): ", en: "6-month outlook (our blend): " }) + chip(p.ours.now.signal, "asset") + " " + (sigGrade(p) ? sigGrade(p).html + " " : "") + t(UI.agree, { a: p.ours.now.agree, n: p.ours.now.total }) + "</div>" +
+      (sigGrade(p) && sigGrade(p).lv === "weak" ? '<div class="range">' + t({ ko: "신호가 약해 확률로 보세요 — 과거 같은 신호 뒤 6개월: ", en: "Weak signal — read the odds instead. Six months after this signal: " }) + probLine(p) + "</div>" : "") +
       '<ul class="sigs">' + p.folders.map(sigTxt).join("") + "</ul></section>" +
       '<section class="card"><h2>' + t({ ko: "가격 그래프", en: "Price chart" }) + "</h2>" + pxBlock(p) + "</section>" +
       '<section class="card"><h2>' + t({ ko: "6개월 전망", en: "Six-month outlook" }) + "</h2>" +
       '<p class="sub">' + t({ ko: "'우리 공식'이 지금처럼 ", en: "When our blend said " }) + chip(o.signal, "asset") + t({ ko: " 신호였던 " + o.same.n + "개월 동안, 그 뒤 6개월 가격이 어떻게 됐는지입니다 (±" + o.thresh + "% 기준).",
-        en: " (" + o.same.n + " months), here is what the price did over the next six months (±" + o.thresh + "%)." }) + "</p>" + bar(o.same) +
+        en: " (" + o.same.n + " months), here is what the price did over the next six months (±" + o.thresh + "%)." }) + "</p>" + bar(o.same) + methodNote(p) +
       '<p class="note">' + t({ ko: "6개월 뒤 수익률 중앙값 " + pctTxt(o.same.p50) + " (10~90% 범위 " + pctTxt(o.same.p10) + " ~ " + pctTxt(o.same.p90) + "). 전체 기간에는 상승 " + pct(o.all.up) + " · 보합 " + pct(o.all.flat) + " · 하락 " + pct(o.all.down) + ", 중앙값 " + pctTxt(o.all.p50) + "였습니다.",
         en: "Median six-month return " + pctTxt(o.same.p50) + " (10–90% range " + pctTxt(o.same.p10) + " to " + pctTxt(o.same.p90) + "). Over all periods: rise " + pct(o.all.up) + " · flat " + pct(o.all.flat) + " · fall " + pct(o.all.down) + ", median " + pctTxt(o.all.p50) + "." }) + "</p>" +
       ((o.signal < 0 && o.same.up > o.same.down) || (o.signal > 0 && o.same.down > o.same.up) ?
