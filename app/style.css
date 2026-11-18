@@ -148,7 +148,7 @@ footer p { margin: 4px 0; }
   .pvs { gap: 10px; }
 }
 
-html[lang="ko"] .en, html[lang="en"] .ko { display: none !important; }
+html:not([lang="ko"]) .ko, html:not([lang="en"]) .en, html:not([lang="zh"]) .zh, html:not([lang="es"]) .es { display: none !important; }
 .hdr-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .langsw { display: inline-flex; border: 1px solid var(--base); border-radius: 999px; padding: 2px; background: var(--card); }
 .langsw button { appearance: none; border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px;
@@ -690,3 +690,17 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .grade.g-mid { background: var(--card); color: var(--ink); }
 .grade.g-weak { background: var(--page); color: var(--muted); border-style: dashed; }
 .dim { opacity: .45; }
+
+/* 메뉴의 언어 선택 */
+.mn-lang .mn-check { visibility: hidden; color: var(--hold); font-weight: 800; font-size: 18px; }
+.mn-lang[aria-pressed="true"] .mn-check { visibility: visible; }
+.mn-lang[aria-pressed="true"] .mn-nm { color: var(--hold); }
+.mn-lang { min-height: 48px; }
+
+/* 긴 언어(스페인어 등)에서 나라 카드가 넘치지 않게 */
+.acard { min-width: 0; overflow: hidden; }
+.ac-top { flex-wrap: wrap; }
+.ac-nm { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.ac-sig { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+.ac-kind { min-width: 0; overflow-wrap: anywhere; }
+.ac-why { overflow-wrap: anywhere; }

@@ -145,13 +145,60 @@
     return tpl.replace(/\{(\w+)\}/g, function (_, k) { return vars[k]; });
   }
   /** 두 언어 텍스트. CSS가 현재 언어만 보여 준다 (언어 전환 시 다시 그릴 필요 없음). */
+  // ---------- 언어: 한국어·영어는 문구에 직접, 중국어·스페인어는 영어 원문으로 사전(i18n.js)을 찾는다 ----------
+  var LANGS = ["ko", "en", "zh", "es"];
+  var LANG_NAME = { ko: "한국어", en: "English", zh: "中文", es: "Español" };
+  function langsw() {  // 메뉴가 없는 화면(로그인·불러오는 중)에서 쓰는 언어 버튼
+    return '<div class="langsw" role="group" aria-label="Language">' + LANGS.map(function (l) {
+      return '<button type="button" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '">' + { ko: "한국어", en: "EN", zh: "中文", es: "ES" }[l] + "</button>";
+    }).join("") + "</div>";
+  }
+  // 사전에 {이름} 자리표시자가 있는 문구는 '문장 틀'로도 쓴다: 숫자가 들어간 서버 문장("Fair rate 3.80% vs 3.00% now")을
+  // 틀("Fair rate {a} vs {b} now")에 맞춰 번역하고, 끼워 넣은 값도 다시 번역한다.
+  var TPL = {}, TRC = {};
+  function tpls(l) {
+    if (TPL[l]) return TPL[l];
+    var d = (window.FED_I18N || {})[l] || {}, out = [];
+    Object.keys(d).forEach(function (k) {
+      if (k.indexOf("{") < 0) return;
+      var names = [], lit = k.replace(/\{\w+\}/g, "").length;
+      var src = k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(\w+)\}/g, function (_, n) { names.push(n); return "(.+?)"; });
+      if (lit < 2) return;  // 자리표시자뿐인 틀은 모든 문장에 걸린다
+      try { out.push({ re: new RegExp("^" + src + "$"), names: names, to: d[k], lit: lit }); } catch (e) {}
+    });
+    out.sort(function (a, b) { return b.lit - a.lit; });
+    return (TPL[l] = out);
+  }
+  function trx(l, en, depth) {  // 영어 원문 → l 언어 (사전에 없으면 영어 그대로)
+    if (en == null || l === "en" || en === "") return en;
+    var d = (window.FED_I18N || {})[l];
+    if (!d) return en;
+    if (d[en] != null) return d[en];
+    if ((depth || 0) > 4 || /^[\d\s.,%:\/()+\-–−×·$€¥£₩*=<>|]*$/.test(en)) return en;
+    var key = l + "\u0001" + en;
+    if (TRC[key] != null) return TRC[key];
+    var res = en, ts = tpls(l);
+    for (var i = 0; i < ts.length; i++) {
+      var m = ts[i].re.exec(en);
+      if (!m) continue;
+      var vals = {};
+      ts[i].names.forEach(function (n, j) { vals[n] = trx(l, m[j + 1], (depth || 0) + 1); });
+      res = ts[i].to.replace(/\{(\w+)\}/g, function (_, n) { return vals[n] != null ? vals[n] : ""; });
+      break;
+    }
+    return (TRC[key] = res);
+  }
+  function word(pair, l) {  // pair의 l 언어 문구
+    return pair[l] != null ? pair[l] : l === "ko" ? pair.ko : trx(l, pair.en);
+  }
   function t(pair, vars) {
-    var ko = vars ? fill(pair.ko, vars) : pair.ko;
-    var en = vars ? fill(pair.en, vars) : pair.en;
-    return '<span class="ko">' + esc(ko) + '</span><span class="en">' + esc(en) + "</span>";
+    return LANGS.map(function (l) {
+      var w = word(pair, l);
+      return '<span class="' + l + '">' + esc(vars ? fill(w, vars) : w) + "</span>";
+    }).join("");
   }
   function tipAttr(ko, en) {
-    return ' data-tip-ko="' + esc(ko) + '" data-tip-en="' + esc(en) + '"';
+    return ' data-tip-ko="' + esc(ko) + '" data-tip-en="' + esc(en) + '" data-tip-zh="' + esc(trx("zh", en)) + '" data-tip-es="' + esc(trx("es", en)) + '"';
   }
   function pct(p) { return Math.round(p * 100) + "%"; }
   function honestNote(p) {
@@ -445,7 +492,8 @@
   }
   // ---------- 관심 나라 고정 (이 기기에만 저장, 크롬 확장에선 알림·배지에도 씀) ----------
   var PINS = "fed-dash-pins";
-  function tt(pair) { return root.lang === "en" ? pair.en : pair.ko; }  // 속성·선택 상자용 평문 (현재 언어)
+  function tt(pair) { return word(pair, root.lang); }  // 속성·선택 상자용 평문 (현재 언어)
+  function isKo() { return root.lang === "ko"; }
   function pins() { try { return JSON.parse(localStorage.getItem(PINS) || "[]"); } catch (e) { return []; } }
   function togglePin(tab) {
     var p = pins(), i = p.indexOf(tab);
@@ -518,13 +566,13 @@
   // ---------- 내 돈 계산기 (무료) ----------
   function calcState() {
     if (!view.calc) {
-      var en = root.lang === "en";
+      var en = !isKo();
       view.calc = { loan: en ? 300000 : 30000, lrate: en ? 6.5 : 4.2, d: 0.25, dep: en ? 10000 : 1000, drate: en ? 4.0 : 3.0, fxAmt: en ? 1000 : 1000000, fxTo: null };
     }
     return view.calc;
   }
   function calcView() {
-    var c = calcState(), ko = root.lang !== "en";
+    var c = calcState(), ko = isKo();
     var bok = data.korea && data.korea.now, nextKr = null, nextUs = null;
     ((data.calendar || {}).banks || []).forEach(function (b) { if (b.key === "kr") nextKr = b; if (b.key === "us") nextUs = b; });
     var hint = function (b) {
@@ -565,7 +613,7 @@
   // 앞으로 1년 기준금리 경로 → 내 변동금리 대출 이자 (meetings.rate_path)
   function pathBank() {
     var rp = data.rate_path || {}, c = calcState();
-    var b = c.pb || (root.lang === "en" ? "us" : "kr");
+    var b = c.pb || (isKo() ? "kr" : "us");
     if (!rp[b]) b = rp.kr ? "kr" : rp.us ? "us" : null;
     return b;
   }
@@ -603,7 +651,7 @@
       '<div class="cres"><div class="cr big"><span>' + t({ ko: "1년 이자 합계 (금리 그대로일 때와 차이)", en: "Interest over the year (vs. no change)" }) + "</span><b>" + money(tot) + " <small>(" + (d >= 0 ? "+" : "−") + money(Math.abs(d)) + ")</small></b></div></div>";
   }
   function calcUpdate() {
-    var c = calcState(), ko = root.lang !== "en";
+    var c = calcState(), ko = isKo();
     var money = function (v) {  // 한국어: 만원 단위 입력 → 원 단위로
       if (ko) { var w = Math.round(v * 10000); return w.toLocaleString("ko-KR") + "원"; }
       return "$" + Math.round(v).toLocaleString("en-US");
@@ -651,7 +699,7 @@
                   CNY: { ko: "위안", en: "CNY" }, KRW: { ko: "원", en: "KRW" }, CHF: { ko: "프랑", en: "CHF" } };
   var FX_ORDER = ["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "CHF"];
   var PXSRC = {};  // 기간 버튼이 다시 그릴 가격 그래프 원본 (자산 폴더·환율)
-  function fxBase() { return view.fxBase || (root.lang === "en" ? "USD" : "KRW"); }
+  function fxBase() { return view.fxBase || (isKo() ? "KRW" : "USD"); }
   function fxPick(base) { var p = view.fxPick; return p && p !== base ? p : base === "USD" ? "EUR" : "USD"; }
   // base 기준으로 x 1단위의 값 (1달러당 값으로 저장돼 있어 base/x 로 나눈다)
   function fxSeries(block, base, x) {
@@ -776,6 +824,11 @@
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
+        '<div class="mn-group mn-langs"><div class="mn-h">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", es: "Idioma" }) + "</div>" +
+        LANGS.map(function (l) {
+          return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
+            '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
+        }).join("") + "</div>" +
         "</div></div>" +
         (proTab && proOn ? '<div class="mn-sheet" data-html2canvas-ignore id="mn-pro" role="dialog" aria-modal="true" aria-label="PRO" hidden><div class="mn-inner">' +
           '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
@@ -789,8 +842,7 @@
       (canRefresh ? '<button type="button" class="refresh" data-refresh>' + t(UI.refresh) + "</button>" : "") +
       (data ? '<button type="button" class="refresh pdf-btn" data-pdf>PDF</button>' : "") +
       (data ? '<button type="button" class="refresh pdf-btn" data-jpg>JPG</button>' : "") +
-      '<div class="langsw" role="group" aria-label="Language">' +
-      '<button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div></header>' + tabs;
+      (tabs ? "" : langsw()) + "</div></header>" + tabs;
   }
 
   function overview() {
@@ -1009,16 +1061,17 @@
     }
     var lv = edge >= 0.05 && (lift == null || (lift >= 0.05 && n >= 30)) ? "strong" : (edge < 0 || (lift != null && (lift < 0 || n < 20))) ? "weak" : "mid";
     var L = { strong: { ko: "신뢰 높음", en: "Strong" }, mid: { ko: "신뢰 보통", en: "Moderate" }, weak: { ko: "참고용", en: "Weak" } }[lv];
-    var why = t({ ko: "최근 10년 적중 " + pct(hr) + " (단순 기준보다 " + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "%p)" + (lift != null ? " · 같은 신호 뒤 그 방향 " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " (평소 " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : ""),
-                  en: "Last 10y hit " + pct(hr) + " (" + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "pp vs. naive)" + (lift != null ? " · went that way " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " after this signal (usually " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : "") });
-    return { lv: lv, html: '<span class="grade g-' + lv + '"' + tipAttr(L.ko + " · " + why, L.en + " · " + why) + ">" + t(L) + "</span>", why: why };
+    var whyP = { ko: "최근 10년 적중 " + pct(hr) + " (단순 기준보다 " + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "%p)" + (lift != null ? " · 같은 신호 뒤 그 방향 " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " (평소 " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : ""),
+                  en: "Last 10y hit " + pct(hr) + " (" + (edge >= 0 ? "+" : "") + Math.round(edge * 100) + "pp vs. naive)" + (lift != null ? " · went that way " + pct(o.same[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + " after this signal (usually " + pct(o.all[o.signal > 0 ? "up" : o.signal < 0 ? "down" : "flat"]) + ")" : "") };
+    var why = t(whyP);
+    return { lv: lv, html: '<span class="grade g-' + lv + '"' + tipAttr(L.ko + " · " + whyP.ko, L.en + " · " + whyP.en) + ">" + t(L) + "</span>", why: why };
   }
   // 결합 방법(선택기): 매달 그때까지 가장 잘 맞힌 방법을 자동으로 고른다 (combine.py)
   function methodNote(p) {
     var m = p && p.ours && p.ours.method;
     if (!m) return "";
-    return '<p class="note">' + t({ ko: "지금 결합 방법: <b>" + m.name.ko + "</b> — 매달, 최근 10년 동안 가장 잘 맞힌 방법(가중 투표·과반 동의·최고 공식·로지스틱 회귀·항상 보합 등)을 그때까지의 정보만으로 자동 선택합니다.",
-      en: "Current method: <b>" + m.name.en + "</b> — each month we pick whichever approach (weighted vote, consensus, best formula, logistic regression, always flat…) did best over the past 10 years, using only information available then." }) + "</p>";
+    return '<p class="note">' + t({ ko: "지금 결합 방법: " + m.name.ko + " — 매달, 최근 10년 동안 가장 잘 맞힌 방법(가중 투표·과반 동의·최고 공식·로지스틱 회귀·항상 보합 등)을 그때까지의 정보만으로 자동 선택합니다.",
+      en: "Current method: " + m.name.en + " — each month we pick whichever approach (weighted vote, consensus, best formula, logistic regression, always flat…) did best over the past 10 years, using only information available then." }) + "</p>";
   }
   // 약한 신호는 한 단어 대신 과거 확률로
   function probLine(p) {
@@ -1259,27 +1312,28 @@
     function cell(lab, val, cls) {
       return '<span class="ro' + (cls ? " " + cls : "") + '"><small>' + lab + "</small><b>" + val + "</b></span>";
     }
-    var lang = root.lang;
+    var lang = root.lang, pk = function (ko, en) { return lang === "ko" ? ko : trx(lang, en); };
+    var vs = function (x) { return fill(word({ ko: "{x} 대비", en: "vs. {x}" }, lang), { x: x }); };
     if (c.mode === "ind") {
       var dot = svg.querySelector(".d-rule");
       dot.setAttribute("cx", X); dot.setAttribute("cy", Y(c.a[i]));
-      var u = lang === "en" ? c.ue : c.uk, en = lang === "en";
+      var u = pk(c.uk, c.ue);
       if (c.raw) {  // 자산 가격 그래프: 실제 값과 % 변화
         var rv = c.raw, pc = function (a, b) { return b ? num((a / b - 1) * 100, 2, true) + "%" : "–"; };
         box.querySelector(".readout").innerHTML =
-          cell(en ? "Date" : "시점", c.x[i]) +
-          cell(en ? (c.vle || "Price") : (c.vlk || "가격"), num(rv[i], c.dg) + ' <span class="u">' + esc(u) + "</span>") +
-          cell(en ? c.pe : c.pk, i > 0 ? pc(rv[i], rv[i - 1]) : "–") +
-          cell((en ? "vs. " : "") + c.x[0] + (en ? "" : " 대비"), pc(rv[i], rv[0]));
+          cell(pk("시점", "Date"), c.x[i]) +
+          cell(pk(c.vlk || "가격", c.vle || "Price"), num(rv[i], c.dg) + ' <span class="u">' + esc(u) + "</span>") +
+          cell(pk(c.pk, c.pe), i > 0 ? pc(rv[i], rv[i - 1]) : "–") +
+          cell(vs(c.x[0]), pc(rv[i], rv[0]));
         var rr = box.querySelector(".cursor-range");
         if (rr && +rr.value !== i) rr.value = i;
         return;
       }
       box.querySelector(".readout").innerHTML =
-        cell(en ? "Month" : "시점", c.x[i]) +
-        cell(en ? "Value" : "값", num(c.a[i]) + ' <span class="u">' + esc(u) + "</span>") +
-        cell(en ? "vs. prior month" : "전월 대비", i > 0 ? num(c.a[i] - c.a[i - 1], 2, true) : "–") +
-        cell((en ? "vs. " : "") + c.x[0] + (en ? "" : " 대비"), num(c.a[i] - c.a[0], 2, true));
+        cell(pk("시점", "Month"), c.x[i]) +
+        cell(pk("값", "Value"), num(c.a[i]) + ' <span class="u">' + esc(u) + "</span>") +
+        cell(pk("전월 대비", "vs. prior month"), i > 0 ? num(c.a[i] - c.a[i - 1], 2, true) : "–") +
+        cell(vs(c.x[0]), num(c.a[i] - c.a[0], 2, true));
       var rg0 = box.querySelector(".cursor-range");
       if (rg0 && +rg0.value !== i) rg0.value = i;
       return;
@@ -1288,12 +1342,12 @@
     da.setAttribute("cx", X); da.setAttribute("cy", Y(c.a[i]));
     dr.setAttribute("cx", X); dr.setAttribute("cy", Y(c.f[i]));
     if (c.mode === "stance") {
-      var LS = c.labs === "as" ? SIG_AS : SIG_ST, L2 = lang === "en" ? LS.en : LS.ko, fs = c.f[i] > 0.5 ? 1 : c.f[i] < -0.5 ? -1 : 0;
+      var LS = c.labs === "as" ? SIG_AS : SIG_ST, L2 = {}; ["1", "0", "-1"].forEach(function (k) { L2[k] = pk(LS.ko[k], LS.en[k]); }); var  fs = c.f[i] > 0.5 ? 1 : c.f[i] < -0.5 ? -1 : 0;
       box.querySelector(".readout").innerHTML =
-        cell(lang === "en" ? "Month" : "시점", c.x[i]) +
-        cell('<i class="lk rule"></i>' + esc(lang === "en" ? c.ne : c.nk), num(c.f[i], 2, true)) +
-        cell(lang === "en" ? "Signal" : "신호", L2[String(fs)]) +
-        cell('<i class="lk actual"></i>' + esc(lang === "en" ? c.ae : c.ak), L2[String(c.a[i])]);
+        cell(pk("시점", "Month"), c.x[i]) +
+        cell('<i class="lk rule"></i>' + esc(pk(c.nk, c.ne)), num(c.f[i], 2, true)) +
+        cell(pk("신호", "Signal"), L2[String(fs)]) +
+        cell('<i class="lk actual"></i>' + esc(pk(c.ak, c.ae)), L2[String(c.a[i])]);
       var rgS = box.querySelector(".cursor-range");
       if (rgS && +rgS.value !== i) rgS.value = i;
       return;
@@ -1301,10 +1355,10 @@
     var gap = c.f[i] - c.a[i];
     var sign = gap > 0 ? "+" : gap < 0 ? "−" : "";
     box.querySelector(".readout").innerHTML =
-      cell(lang === "en" ? "Month" : "시점", c.x[i]) +
-      cell('<i class="lk actual"></i>' + esc(lang === "en" ? c.ae : c.ak), c.a[i].toFixed(2) + "%") +
-      cell('<i class="lk rule"></i>' + esc(lang === "en" ? c.ne : c.nk), c.f[i].toFixed(2) + "%") +
-      cell(lang === "en" ? c.de : c.dk, sign + Math.abs(gap).toFixed(2) + "%p");
+      cell(pk("시점", "Month"), c.x[i]) +
+      cell('<i class="lk actual"></i>' + esc(pk(c.ak, c.ae)), c.a[i].toFixed(2) + "%") +
+      cell('<i class="lk rule"></i>' + esc(pk(c.nk, c.ne)), c.f[i].toFixed(2) + "%") +
+      cell(pk(c.dk, c.de), sign + Math.abs(gap).toFixed(2) + "%p");
     var rg = box.querySelector(".cursor-range");
     if (rg && +rg.value !== i) rg.value = i;
   }
@@ -2303,7 +2357,7 @@
         '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" + t(auth.busy ? { ko: "보내는 중…", en: "Sending…" } : { ko: "재설정 메일 보내기", en: "Send reset email" }) + "</button>" +
         '<button type="button" class="linkbtn" data-auth="tosignin">' + t({ ko: "로그인으로 돌아가기", en: "Back to sign in" }) + "</button></div></form>";
     }
-    return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
+    return '<div class="wrap gate"><div class="gate-top">' + langsw() + "</div>" +
       '<section class="card gate-card"><h1>' + t(title) + "</h1>" + '<p class="sub">' + t(sub) + "</p>" + body + msg + "</section></div>";
   }
   function forgotLink() { return '<button type="button" class="linkbtn" data-auth="toforgot">' + t({ ko: "비밀번호를 잊었어요", en: "Forgot password?" }) + "</button>"; }
@@ -2366,7 +2420,7 @@
         '<button type="button" class="linkbtn" data-auth="' + (signup ? "tosignin" : "tosignup") + '">' +
         t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (무료 가입)", en: "New here? Sign up free" }) + "</button>" + (signup ? "" : forgotLink()) + "</div></form>";
     }
-    return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
+    return '<div class="wrap gate"><div class="gate-top">' + langsw() + "</div>" +
       '<section class="card gate-card"><h1>' + t(UI.title) + "</h1>" +
       '<p class="sub">' + t({ ko: "로그인하면 무료 화면을 볼 수 있습니다. 경제학자·자산·환율 폴더는 PRO 회원만 열립니다.", en: "Sign in to see the free screens. Economist, asset and currency folders are for PRO members." }) + "</p>" + body + msg + "</section></div>";
   }
@@ -2433,8 +2487,8 @@
   function setLang(l) {
     root.lang = l;
     document.querySelectorAll(".chart").forEach(function (box) { if (box._i != null) setCursor(box, box._i); });
-    document.title = UI.title[l];
-    document.querySelectorAll(".langsw button").forEach(function (b) {
+    document.title = word(UI.title, l);
+    document.querySelectorAll("[data-lang]").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.lang === l));
     });
     document.querySelectorAll("[data-aria]").forEach(function (e) {
@@ -2620,6 +2674,7 @@
     if (b) {
       setLang(b.dataset.lang);
       try { localStorage.setItem(STORE, b.dataset.lang); } catch (err) {}
+      if (b.classList.contains("mn-lang")) openMenu(false);
       extSet({ lang: b.dataset.lang });
       if (view.tab === "calc") { view.calc = null; render(); }  // 금액 단위(만원/$)가 언어를 따라간다
       if ((!view.fxBase && view.tab === "all" && data && data.fx) || (view.tab === "all" && extOn())) render();  // 환율 기본 기준(한국어=원, 영어=달러)이 언어를 따라가도록
@@ -2830,7 +2885,7 @@
         document.body.appendChild(a); a.click(); a.remove();
       }).catch(function (err) {
         restoreImage();
-        alert(UI.jpgFail[root.lang] + (err ? "\n" + err : ""));
+        alert(word(UI.jpgFail, root.lang) + (err ? "\n" + err : ""));
       }).then(function () {
         btn.disabled = false;
         btn.innerHTML = label;
@@ -2839,11 +2894,12 @@
   }
 
   /** PDF 생성 도구(fed_model/file_export.py)가 호출: 언어를 정하고 인쇄용으로 펼친다. */
-  window.__fedPreparePdf = function (l) { if (l === "ko" || l === "en") setLang(l); preparePrint(); return !!data; };
+  window.__fedPreparePdf = function (l) { if (LANGS.indexOf(l) >= 0) setLang(l); preparePrint(); return !!data; };
 
   var saved = null;
   try { saved = localStorage.getItem(STORE); } catch (err) {}
-  root.lang = saved === "ko" || saved === "en" ? saved : (root.lang === "en" ? "en" : "ko");
+  var nav = ((navigator.languages && navigator.languages[0]) || navigator.language || "").slice(0, 2).toLowerCase();
+  root.lang = LANGS.indexOf(saved) >= 0 ? saved : LANGS.indexOf(root.lang) >= 0 && root.lang !== "ko" ? root.lang : nav === "ko" ? "ko" : LANGS.indexOf(nav) >= 0 ? nav : "ko";
   // 앱을 열면 항상 미국 연준 화면에서 시작한다 (마지막 탭을 복원하지 않음)
   load();
 })();
