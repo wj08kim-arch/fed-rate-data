@@ -753,19 +753,19 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO 전체", en: "PRO overview" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       // 세 '전체' 화면(홈·나라별 금리·PRO)에서는 세 버튼을 메뉴 옆에 두고, 지금 화면 버튼을 눌린 모양으로
-      var ALLS = [["all", { ko: "전체", en: "Home" }, true], ["countries", { ko: "나라별 금리", en: "Countries" }, !!cl.length], ["proall", { ko: "PRO 전체", en: "PRO" }, !!proOn]];
+      var ALLS = [["all", { ko: "전체", en: "Home" }, true], ["countries", { ko: "금리", en: "Rates" }, !!cl.length], ["proall", { ko: "PRO", en: "PRO" }, !!proOn]];
       var gos = ALLS.some(function (x) { return x[0] === view.tab; }) ? ALLS.filter(function (x) { return x[2]; }).map(function (x) {
         var on = x[0] === view.tab;
         return '<button type="button" class="mbar-go' + (on ? " on" : "") + '" data-tab="' + x[0] + '" aria-pressed="' + on + '">' + t(x[1]) + "</button>";
       }).join("") : "";
-      tabs = '<nav class="mbar" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
+      tabs = '<nav class="mbar' + (gos ? " has-gos" : "") + '" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
         '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
         (view.tab === "proall" ? '<button type="button" class="mn-btn mn-pro" data-menu-pro aria-expanded="false" aria-controls="mn-pro" aria-label="' + esc(tt({ ko: "PRO 메뉴 열기", en: "Open PRO menu" })) + '">PRO</button>' : "") +
-        '<span class="mbar-cur">' + t(curName) + "</span>" + (gos ? '<span class="mbar-gos">' + gos + "</span>" : "") + "</nav>" +
+        (view.tab === "proall" ? "" : '<span class="mbar-cur">' + t(curName) + "</span>") + (gos ? '<span class="mbar-gos">' + gos + "</span>" : "") + "</nav>" +
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +

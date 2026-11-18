@@ -671,3 +671,9 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .mbar-gos .mbar-go.on { background: var(--accent); color: var(--card); }
 .mbar-gos .mbar-go:not(.on):hover { background: var(--page); }
 .mn-btn.mn-pro { width: 44px; height: 44px; padding: 0; font-size: 11.5px; letter-spacing: .03em; }
+/* 세 '전체' 화면: 메뉴 버튼과 같은 줄에 맞추도록 버튼을 조금 작게, 제목은 남는 폭만큼만 */
+.mbar.has-gos { flex-wrap: nowrap; }
+.mbar.has-gos .mbar-cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbar-gos { flex: none; }
+.mbar-gos .mbar-go { min-height: 32px; padding: 0 10px; font-size: 13px; }
+@media (max-width: 420px) { .mbar-gos .mbar-go { padding: 0 8px; font-size: 12.5px; } .mbar.has-gos { gap: 8px; } }
