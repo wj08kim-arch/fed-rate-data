@@ -756,10 +756,11 @@
       var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO 전체", en: "PRO overview" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
-      // 세 '전체' 화면(홈·나라별 금리·PRO)에서는 나머지 두 '전체'로 가는 버튼을 메뉴 옆에 둔다
+      // 세 '전체' 화면(홈·나라별 금리·PRO)에서는 세 버튼을 메뉴 옆에 두고, 지금 화면 버튼을 눌린 모양으로
       var ALLS = [["all", { ko: "전체", en: "Home" }, true], ["countries", { ko: "나라별 금리", en: "Countries" }, !!cl.length], ["proall", { ko: "PRO 전체", en: "PRO" }, !!proOn]];
-      var gos = ALLS.some(function (x) { return x[0] === view.tab; }) ? ALLS.filter(function (x) { return x[0] !== view.tab && x[2]; }).map(function (x) {
-        return '<button type="button" class="mbar-go" data-tab="' + x[0] + '">' + t(x[1]) + ' <span aria-hidden="true">›</span></button>';
+      var gos = ALLS.some(function (x) { return x[0] === view.tab; }) ? ALLS.filter(function (x) { return x[2]; }).map(function (x) {
+        var on = x[0] === view.tab;
+        return '<button type="button" class="mbar-go' + (on ? " on" : "") + '" data-tab="' + x[0] + '" aria-pressed="' + on + '">' + t(x[1]) + "</button>";
       }).join("") : "";
       tabs = '<nav class="mbar" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
         '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
