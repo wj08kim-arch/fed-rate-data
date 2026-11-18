@@ -757,7 +757,8 @@
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       tabs = '<nav class="mbar" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
-        '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button><span class="mbar-cur">' + t(curName) + "</span></nav>" +
+        '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button><span class="mbar-cur">' + t(curName) + "</span>" +
+        (view.tab === "all" && cl.length ? '<button type="button" class="mbar-go" data-tab="countries">' + t({ ko: "나라별 금리", en: "Countries" }) + ' <span aria-hidden="true">›</span></button>' : "") + "</nav>" +
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
