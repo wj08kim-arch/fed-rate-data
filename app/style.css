@@ -677,9 +677,9 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .mbar-gos { flex: none; }
 .mbar-gos .mbar-go { min-height: 32px; padding: 0 10px; font-size: 13px; }
 @media (max-width: 420px) { .mbar-gos .mbar-go { padding: 0 8px; font-size: 12.5px; } .mbar.has-gos { gap: 8px; } }
-.mbar-go.mbar-proall { margin-left: auto; min-height: 36px; padding: 0 12px; font-size: 13px; flex: none; }
-.mbar:has(.mbar-proall) { flex-wrap: nowrap; }
-.mbar:has(.mbar-proall) .mbar-cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* PRO 폴더 화면: [☰][PRO]  폴더 이름(가운데)  [PRO 전체] */
-.mbar:has(.mbar-proall) .mbar-cur { flex: 1 1 auto; text-align: center; }
-.mbar:has(.mbar-proall) .mbar-go.mbar-proall { margin-left: 0; }
+.mbar-go.mbar-up { margin-left: auto; min-height: 36px; padding: 0 12px; font-size: 13px; flex: none; }
+.mbar:has(.mbar-up) { flex-wrap: nowrap; }
+.mbar:has(.mbar-up) .mbar-cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 폴더 화면: [☰][PRO] 폴더 이름 ……… [전체로 가는 버튼] */
+.mbar:has(.mbar-up) .mbar-cur { flex: 0 1 auto; text-align: left; }
+.mbar:has(.mbar-up) .mbar-go.mbar-up { margin-left: auto; }
