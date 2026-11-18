@@ -709,3 +709,17 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .mn-langtoggle[aria-expanded="true"] .mn-caret { transform: rotate(90deg); }
 .mn-langlist { display: grid; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
 .mn-langlist[hidden] { display: none; }
+
+/* 머리글: 제목 줄 오른쪽 끝에 새로고침 (PDF·JPG 버튼은 뺐음) */
+header { flex-wrap: nowrap; align-items: flex-start; }
+header .brand { min-width: 0; }
+header .hdr-right { flex: none; margin-left: auto; }
+
+/* 불러오는 중 첫 화면 (로고) */
+.splash { min-height: 70vh; min-height: 70dvh; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center; }
+.splash img { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 6px 24px rgba(15, 29, 51, .18); }
+.splash b { font-size: 20px; letter-spacing: -0.01em; color: var(--ink); }
+.splash .spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--hold); animation: spin .8s linear infinite; }
+.splash .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .splash .spin { animation: none; } }
