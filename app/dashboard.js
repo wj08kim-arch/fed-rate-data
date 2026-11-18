@@ -2136,7 +2136,31 @@
       "<footer><p>" + proDisc() + "</p></footer>";
   }
 
+  // 휴대폰 웹앱 잠금 (app/web/build.py가 window.FED_GATE=true를 넣는다): 승인된 회원이 로그인해야 화면이 열린다.
+  // 화면만 가리는 장치라, 공개 데이터 파일 자체를 숨기지는 않는다.
+  function gateOn() { return !!window.FED_GATE && serverOn() && !(auth.session && auth.member === true); }
+  function gateView() {
+    var s = auth.session, msg = auth.msg ? '<p class="note warn">' + t(auth.msg) + "</p>" : "", body;
+    if (s && auth.member === false) {
+      body = '<p class="lead-p">' + t({ ko: s.email + " 계정은 아직 승인되지 않았습니다. 관리자에게 승인을 요청하세요.", en: s.email + " hasn't been approved yet. Ask the admin for access." }) + "</p>" +
+        '<div class="btn-row"><button type="button" class="refresh" data-auth="retry">' + t({ ko: "다시 확인", en: "Check again" }) + "</button>" +
+        '<button type="button" class="refresh" data-auth="logout">' + t({ ko: "다른 계정으로", en: "Use another account" }) + "</button></div>";
+    } else if (s && auth.member == null) {
+      body = '<p class="lead-p">' + t({ ko: "확인 중…", en: "Checking…" }) + "</p>";
+    } else {
+      body = '<form class="authf" data-authform="signin">' +
+        "<label>" + t({ ko: "이메일", en: "Email" }) + "</label>" +
+        '<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" value="' + esc(auth.email) + '">' +
+        "<label>" + t({ ko: "비밀번호", en: "Password" }) + "</label>" +
+        '<input name="password" type="password" minlength="6" required autocomplete="current-password">' +
+        '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" + t(auth.busy ? { ko: "확인 중…", en: "Checking…" } : { ko: "들어가기", en: "Enter" }) + "</button></div></form>";
+    }
+    return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
+      '<section class="card gate-card"><h1>' + t(UI.title) + "</h1>" +
+      '<p class="sub">' + t({ ko: "승인된 회원만 볼 수 있습니다. 이메일과 비밀번호를 입력하세요.", en: "For approved members only. Enter your email and password." }) + "</p>" + body + msg + "</section></div>";
+  }
   function render() {
+    if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
     var body;
     if (window.__FED_ALL__ && pro) {
       // 공유용 PDF: 오늘의 전망 + PRO 요약 + 폴더 전체를 한 문서에
@@ -2182,6 +2206,7 @@
   }
 
   function renderState(titlePair, bodyPair) {
+    if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
     app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + '<div class="state"><b>' + t(titlePair) + "</b>" +
       (bodyPair ? t(bodyPair) : "") + "</div></div>";
     setLang(root.lang);

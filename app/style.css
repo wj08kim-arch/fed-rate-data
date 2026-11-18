@@ -634,3 +634,10 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .mn-r b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .mn-chev { font-size: 22px; color: var(--muted); line-height: 1; }
 @media print { .mbar, .mn-sheet { display: none !important; } }
+
+/* 휴대폰 웹앱 잠금 화면 */
+.gate { min-height: 100vh; min-height: 100dvh; display: grid; align-content: center; gap: 12px; max-width: 440px; }
+.gate-top { display: flex; justify-content: flex-end; }
+.gate-card h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.gate-card .authf input { font-size: 16px; }
+.gate-go { min-width: 120px; min-height: 44px; }
