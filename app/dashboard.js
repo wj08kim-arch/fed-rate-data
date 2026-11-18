@@ -367,6 +367,20 @@
     return '<section class="card weekly"><div class="eyebrow">' + t({ ko: "주간 요약", en: "Week in review" }) + " · " + md(w.from) + " ~ " + md(w.to) + "</div><ul>" +
       w.lines.map(function (l) { return '<li class="wk-' + l.kind + '">' + t(l) + "</li>"; }).join("") + "</ul></section>";
   }
+  // 결정 기록만 따로 (다음 결정 일정은 ☰ 메뉴의 나라별 금리 옆에 회색으로 보여 준다)
+  function recordSection() {
+    var r = data.calendar && data.calendar.record;
+    if (!r || !r.items || !r.items.length) return "";
+    return '<section class="card">' + recordHtml(r).replace('<h3 class="cal-h3">', "<h2>").replace("</h3>", "</h2>") + "</section>";
+  }
+  function nextDecision(tab) {  // 메뉴용 짧은 표기: "11/26 · D-7"
+    var c = data.calendar, b = c && c.banks && c.banks.filter(function (x) { return x.tab === tab; })[0];
+    if (!b || !b.next || !b.next.length) return "";
+    var n = b.next[0];
+    if (n.approx === "month" || n.approx === "by") return calDate(n);
+    var d = ymd(n.d), k = dday(n.d);
+    return (d.getMonth() + 1) + "/" + d.getDate() + (k >= 0 ? " · " + (k === 0 ? "D-DAY" : "D-" + k) : "");
+  }
   function calSection(rows) {
     var c = data.calendar;
     if (!c || !c.banks) return "";
@@ -494,7 +508,7 @@
         "최근 결정: 싱가포르(환율로 정책)와 중국(공식이 맞지 않음)은 앞으로의 판단 대신 가장 최근 실제 결정을 보여 줍니다.",
         en: "Outlook: the US uses next-FOMC odds; Korea, the euro area, Japan and Switzerland compare the fair rate from inflation and jobs with today's rate (beyond 0.5pp = hike or cut); Hong Kong follows the Fed. " +
         "Latest decision: Singapore (policy via the exchange rate) and China (formulas don't fit) show their most recent actual move instead of a call." }) + "</p></section>" +
-      calSection(rows) + releaseSection() + alertBox() + installBox() + fxSection() +
+      recordSection() + releaseSection() + alertBox() + installBox() + fxSection() +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
 
@@ -718,18 +732,18 @@
     var tabs = "";
     if (data && (proOn || cl.length)) {
       var item = function (tab, name, right, badge, sub) {
-        var cur = tab === view.tab;
+        var cur = tab === view.tab, when = right ? nextDecision(tab) : "";
         return '<button type="button" class="mn-item' + (cur ? " cur" : "") + '" data-tab="' + tab + '"' + (cur ? ' aria-current="page"' : "") + ">" +
           '<span class="mn-l"><span class="mn-nm">' + t(name) + (badge ? ' <span class="pro-badge">PRO</span>' : "") + "</span>" +
           (sub ? '<span class="mn-sub">' + t(sub) + "</span>" : "") + "</span>" +
-          '<span class="mn-r">' + (right ? '<b>' + right + "</b>" : "") + '<span class="mn-chev" aria-hidden="true">›</span></span></button>';
+          '<span class="mn-r">' + (when ? '<span class="mn-when" title="' + esc(tt({ ko: "다음 금리 결정", en: "Next rate decision" })) + '">' + when + "</span>" : "") + (right ? '<b>' + right + "</b>" : "") + '<span class="mn-chev" aria-hidden="true">›</span></span></button>';
       };
       var us = data.meta ? num((data.meta.target_low + data.meta.target_high) / 2) + "%" : "";
       var groups = [
         [{ ko: "홈", en: "Home" }, (cl.length ? item("all", UI.tabAll, "", false, { ko: "오늘 요약 · 나라별 방향 · 일정", en: "Today, every country, calendar" }) : "") +
           item("overview", UI.tabOverview, us, false, { ko: "다음 FOMC 전망", en: "Next FOMC outlook" }) +
           (data.fx ? item("calc", { ko: "내 돈 계산기", en: "Calculator" }, "", false, { ko: "대출·예금 이자, 환전", en: "Loans, savings, currency" }) : "")],
-        [{ ko: "나라별 금리", en: "Countries" }, cl.slice().sort(function (a, b) { var pn = pins(); return (pn.indexOf(a.tab) < 0) - (pn.indexOf(b.tab) < 0); }).map(function (x) { return item(x.tab, x.name, x.rate, false, x.bank); }).join("")],
+        [{ ko: "나라별 금리", en: "Countries" }, cl.slice().sort(function (a, b) { var pn = pins(); return (pn.indexOf(a.tab) < 0) - (pn.indexOf(b.tab) < 0); }).map(function (x) { return item(x.tab, x.name, x.rate, false, x.bank); }).join(""), { ko: "회색 글씨: 다음 금리 결정일 · 남은 날", en: "Grey: next decision date · days left" }],
         [{ ko: "PRO 폴더", en: "PRO folders" }, proOn ? item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
@@ -741,7 +755,7 @@
         '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button><span class="mbar-cur">' + t(curName) + "</span></nav>" +
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
-        groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + g[1] + "</div>"; }).join("") +
+        groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
         "</div></div>";
     }
     return "<header><div class=\"brand\"><h1>" + t(UI.title) + "</h1>" +
