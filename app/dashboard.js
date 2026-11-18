@@ -713,25 +713,37 @@
     return out;
   }
   function header(canRefresh) {
-    // 탭은 3칸: 미국 연준 · 다른 나라(펼치면 나라 카드) · 경제학자 폴더
-    var cl = countryList(), curC = cl.filter(function (x) { return x.tab === view.tab; })[0];
-    var tabs = data && (pro || serverOn() || proLocked() || cl.length) ? '<nav class="tabs" role="tablist">' +
-      (cl.length ? '<button type="button" role="tab" data-tab="all" aria-selected="' + (view.tab === "all") + '">' + t(UI.tabAll) + "</button>" : "") +
-      '<button type="button" role="tab" data-tab="overview" aria-selected="' + (view.tab === "overview") + '">' + t(UI.tabOverview) + "</button>" +
-      (data.fx ? '<button type="button" role="tab" data-tab="calc" aria-selected="' + (view.tab === "calc") + '">' + t({ ko: "내 돈 계산기", en: "Calculator" }) + "</button>" : "") +
-      (cl.length ? '<button type="button" role="tab" class="cp-tab" data-cpick aria-expanded="false" aria-selected="' + !!curC + '">' +
-        (curC ? t(curC.name) : t({ ko: "다른 나라", en: "Countries" })) + ' <span class="cp-caret" aria-hidden="true">▾</span></button>' : "") +
-      (pro || serverOn() || proLocked() ? '<button type="button" role="tab" data-tab="pro" aria-selected="' + (view.tab === "pro") + '">' + t(UI.tabPro) +
-      ' <span class="pro-badge">PRO</span></button>' : "") +
-      ((pro && pro.au) || (!pro && (serverOn() || proLocked())) ? '<button type="button" role="tab" data-tab="assets" aria-selected="' + (view.tab === "assets") + '">' + t(UI.tabAssets) +
-      ' <span class="pro-badge">PRO</span></button>' : "") +
-      ((pro && pro.kw) || (!pro && (serverOn() || proLocked())) ? '<button type="button" role="tab" data-tab="fxpro" aria-selected="' + (view.tab === "fxpro") + '">' + t(UI.tabFx) +
-      ' <span class="pro-badge">PRO</span></button>' : "") + "</nav>" +
-      (cl.length ? '<div class="cpanel" hidden><div class="folders">' + cl.map(function (x) {
-        return '<button type="button" class="folder' + (x.tab === view.tab ? " cur" : "") + '" data-tab="' + x.tab + '"' + (x.tab === view.tab ? ' aria-current="true"' : "") + ">" + FOLDER_ICON +
-          '<span class="f-who">' + t(x.bank) + "</span>" + '<span class="f-name">' + t(x.name) + "</span>" +
-          '<span class="f-foot"><b class="cp-rate">' + x.rate + '</b><span class="lab">' + t(x.sub) + "</span></span></button>";
-      }).join("") + "</div></div>" : "") : "";
+    // 메뉴(☰): 누르면 화면 전체에 모든 화면 목록이 뜨고, 고르면 그 화면으로 간다 (토스뱅크식)
+    var cl = countryList(), proOn = pro || serverOn() || proLocked();
+    var tabs = "";
+    if (data && (proOn || cl.length)) {
+      var item = function (tab, name, right, badge, sub) {
+        var cur = tab === view.tab;
+        return '<button type="button" class="mn-item' + (cur ? " cur" : "") + '" data-tab="' + tab + '"' + (cur ? ' aria-current="page"' : "") + ">" +
+          '<span class="mn-l"><span class="mn-nm">' + t(name) + (badge ? ' <span class="pro-badge">PRO</span>' : "") + "</span>" +
+          (sub ? '<span class="mn-sub">' + t(sub) + "</span>" : "") + "</span>" +
+          '<span class="mn-r">' + (right ? '<b>' + right + "</b>" : "") + '<span class="mn-chev" aria-hidden="true">›</span></span></button>';
+      };
+      var us = data.meta ? num((data.meta.target_low + data.meta.target_high) / 2) + "%" : "";
+      var groups = [
+        [{ ko: "홈", en: "Home" }, (cl.length ? item("all", UI.tabAll, "", false, { ko: "오늘 요약 · 나라별 방향 · 일정", en: "Today, every country, calendar" }) : "") +
+          item("overview", UI.tabOverview, us, false, { ko: "다음 FOMC 전망", en: "Next FOMC outlook" }) +
+          (data.fx ? item("calc", { ko: "내 돈 계산기", en: "Calculator" }, "", false, { ko: "대출·예금 이자, 환전", en: "Loans, savings, currency" }) : "")],
+        [{ ko: "나라별 금리", en: "Countries" }, cl.slice().sort(function (a, b) { var pn = pins(); return (pn.indexOf(a.tab) < 0) - (pn.indexOf(b.tab) < 0); }).map(function (x) { return item(x.tab, x.name, x.rate, false, x.bank); }).join("")],
+        [{ ko: "PRO 폴더", en: "PRO folders" }, proOn ? item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
+          ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
+          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
+      ].filter(function (g) { return g[1]; });
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+        view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
+        ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
+      tabs = '<nav class="mbar" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
+        '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button><span class="mbar-cur">' + t(curName) + "</span></nav>" +
+        '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
+        '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
+        groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + g[1] + "</div>"; }).join("") +
+        "</div></div>";
+    }
     return "<header><div class=\"brand\"><h1>" + t(UI.title) + "</h1>" +
       (data ? '<span class="meta">' + t(UI.asof, { d: data.meta.generated }) + (fromCache ? " · " + t(UI.offline) : "") + "</span>" : "") +
       '</div><div class="hdr-right">' +
@@ -1346,7 +1358,15 @@
       else if (e.key === "End") { setCursor(box, 1e9); e.preventDefault(); }
     });
   }
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeZoom(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeZoom(); openMenu(false); } });
+  function openMenu(on) {
+    var sh = document.getElementById("mn-sheet"), btn = app.querySelector("[data-menu]");
+    if (!sh) return;
+    sh.hidden = !on;
+    document.documentElement.classList.toggle("mn-open", on);
+    if (btn) btn.setAttribute("aria-expanded", String(on));
+    if (on) { var c = sh.querySelector(".mn-item.cur") || sh.querySelector(".mn-x"); if (c) c.focus(); } else if (btn) btn.focus();
+  }
 
   function aboutBlock(f) {
     var rg = regionOf(f.key), since = rg.since.slice(0, 4);
@@ -2372,6 +2392,8 @@
       else if (act === "retry") { fetchServerPro().then(function (p) { pro = p; render(); }); }
       return;
     }
+    if (e.target.closest("[data-menu]")) { openMenu(true); return; }
+    if (e.target.closest("[data-menu-close]") || e.target.classList.contains("mn-sheet")) { openMenu(false); return; }
     var cp = e.target.closest("[data-cpick]");
     if (cp) {
       var panel = document.querySelector(".cpanel");
@@ -2400,6 +2422,7 @@
     }
     var tb = e.target.closest("[data-tab]");
     if (tb) {
+      document.documentElement.classList.remove("mn-open");
       view.tab = tb.dataset.tab; view.folder = null;
       render(); scrollTo(0, 0); return;
     }
