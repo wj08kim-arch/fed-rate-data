@@ -704,3 +704,8 @@ html.mn-open, html.mn-open body { overflow: hidden; }
 .ac-sig { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
 .ac-kind { min-width: 0; overflow-wrap: anywhere; }
 .ac-why { overflow-wrap: anywhere; }
+.mn-curlang { font-size: 14px; font-weight: 600; color: var(--muted); }
+.mn-caret { transition: transform .15s ease; }
+.mn-langtoggle[aria-expanded="true"] .mn-caret { transform: rotate(90deg); }
+.mn-langlist { display: grid; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.mn-langlist[hidden] { display: none; }

@@ -824,11 +824,14 @@
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
-        '<div class="mn-group mn-langs"><div class="mn-h">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", es: "Idioma" }) + "</div>" +
+        '<div class="mn-group mn-langs"><button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
+          '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", es: "Idioma" }) + "</span></span>" +
+          '<span class="mn-r"><b class="mn-curlang">' + LANGS.map(function (l) { return '<span class="' + l + '">' + LANG_NAME[l] + "</span>"; }).join("") + '</b><span class="mn-chev mn-caret" aria-hidden="true">›</span></span></button>' +
+          '<div class="mn-langlist" id="mn-langlist" hidden>' +
         LANGS.map(function (l) {
           return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
-        }).join("") + "</div>" +
+        }).join("") + "</div></div>" +
         "</div></div>" +
         (proTab && proOn ? '<div class="mn-sheet" data-html2canvas-ignore id="mn-pro" role="dialog" aria-modal="true" aria-label="PRO" hidden><div class="mn-inner">' +
           '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
@@ -2689,6 +2692,13 @@
       else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
       else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }
       else if (act === "retry") { fetchServerPro().then(function (p) { pro = p; render(); }); }
+      return;
+    }
+    var lt = e.target.closest("[data-langtoggle]");
+    if (lt) {
+      var ll = document.getElementById("mn-langlist"), open = ll.hidden;
+      ll.hidden = !open; lt.setAttribute("aria-expanded", String(open));
+      if (open) ll.scrollIntoView({ block: "nearest" });
       return;
     }
     if (e.target.closest("[data-menu]")) { openMenu(true, "mn-sheet"); return; }
