@@ -766,7 +766,8 @@
       tabs = '<nav class="mbar' + (gos ? " has-gos" : "") + '" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
         '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
         (proTab && proOn ? '<button type="button" class="mn-btn mn-pro" data-menu-pro aria-expanded="false" aria-controls="mn-pro" aria-label="' + esc(tt({ ko: "PRO 메뉴 열기", en: "Open PRO menu" })) + '">PRO</button>' : "") +
-        (view.tab === "proall" ? "" : '<span class="mbar-cur">' + t(curName) + "</span>") + (gos ? '<span class="mbar-gos">' + gos + "</span>" : "") + "</nav>" +
+        (view.tab === "proall" ? "" : '<span class="mbar-cur">' + t(curName) + "</span>") +
+        (proTab && proOn && view.tab !== "proall" ? '<button type="button" class="mbar-go mbar-proall" data-tab="proall">' + t({ ko: "PRO 전체", en: "All PRO" }) + "</button>" : "") + (gos ? '<span class="mbar-gos">' + gos + "</span>" : "") + "</nav>" +
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
