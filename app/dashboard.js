@@ -2271,6 +2271,82 @@
       "<footer><p>" + proDisc() + "</p></footer>";
   }
 
+  // ---------- 비밀번호 재설정 (Supabase: 메일 링크 → 이 앱 주소#access_token…&type=recovery → 새 비밀번호) ----------
+  var RESET_URL = window.FED_RESET_URL || "https://wj08kim-arch.github.io/fed-rate-data/app/";
+  function readRecoveryLink() {
+    var h = location.hash || "";
+    if (h.indexOf("type=recovery") < 0 && h.indexOf("error_code=") < 0) return;
+    var q = {};
+    h.replace(/^#/, "").split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) q[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, " ")); });
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}  // 토큰을 주소창·기록에 남기지 않는다
+    if (q.access_token && q.type === "recovery") auth.recovery = { access_token: q.access_token, refresh_token: q.refresh_token, expires_in: +q.expires_in || 3600 };
+    else if (q.error_code) { auth.step = "forgot"; auth.msg = { ko: "비밀번호 재설정 링크가 만료됐거나 이미 사용됐습니다. 아래에서 다시 요청하세요.", en: "That reset link has expired or was already used. Request a new one below." }; }
+ }
+  function acctOn() { return serverOn() && (!!auth.recovery || auth.step === "forgot"); }
+  function acctView() {
+    var msg = auth.msg ? '<p class="note' + (auth.msgOk ? "" : " warn") + '">' + t(auth.msg) + "</p>" : "", body, title, sub;
+    if (auth.recovery) {
+      title = { ko: "새 비밀번호 정하기", en: "Set a new password" };
+      sub = { ko: "새로 쓸 비밀번호를 두 번 입력하세요 (6자 이상).", en: "Enter your new password twice (6+ characters)." };
+      body = '<form class="authf" data-authform="newpw">' +
+        "<label>" + t({ ko: "새 비밀번호", en: "New password" }) + "</label>" +
+        '<input name="password" type="password" minlength="6" required autocomplete="new-password">' +
+        "<label>" + t({ ko: "한 번 더", en: "Repeat" }) + "</label>" +
+        '<input name="password2" type="password" minlength="6" required autocomplete="new-password">' +
+        '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" + t(auth.busy ? { ko: "바꾸는 중…", en: "Saving…" } : { ko: "비밀번호 바꾸기", en: "Change password" }) + "</button></div></form>";
+    } else {
+      title = { ko: "비밀번호 찾기", en: "Forgot password" };
+      sub = { ko: "가입한 이메일을 넣으면 비밀번호를 새로 정하는 링크를 보내 드립니다. 메일이 안 보이면 스팸함도 확인하세요.", en: "Enter your sign-up email and we'll send a link to set a new password. Check spam if you don't see it." };
+      body = '<form class="authf" data-authform="forgot">' +
+        "<label>" + t({ ko: "이메일", en: "Email" }) + "</label>" +
+        '<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" value="' + esc(auth.email) + '">' +
+        '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" + t(auth.busy ? { ko: "보내는 중…", en: "Sending…" } : { ko: "재설정 메일 보내기", en: "Send reset email" }) + "</button>" +
+        '<button type="button" class="linkbtn" data-auth="tosignin">' + t({ ko: "로그인으로 돌아가기", en: "Back to sign in" }) + "</button></div></form>";
+    }
+    return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
+      '<section class="card gate-card"><h1>' + t(title) + "</h1>" + '<p class="sub">' + t(sub) + "</p>" + body + msg + "</section></div>";
+  }
+  function forgotLink() { return '<button type="button" class="linkbtn" data-auth="toforgot">' + t({ ko: "비밀번호를 잊었어요", en: "Forgot password?" }) + "</button>"; }
+  function recoverySubmit(form) {
+    var kind = form.dataset.authform;
+    auth.msg = null; auth.msgOk = false;
+    if (kind === "forgot") {
+      auth.email = form.querySelector('[name="email"]').value.trim();
+      auth.busy = true; render();
+      sbFetch("/auth/v1/recover?redirect_to=" + encodeURIComponent(RESET_URL), { method: "POST", body: { email: auth.email } })
+        .then(function (r) {
+          auth.busy = false;
+          if (r.ok) { auth.msgOk = true; auth.msg = { ko: auth.email + " 로 재설정 링크를 보냈습니다 (가입된 이메일이라면). 메일의 링크를 누르면 새 비밀번호를 정하는 화면이 열립니다. 링크는 1시간 동안만 쓸 수 있습니다.", en: "If " + auth.email + " has an account, a reset link is on its way. Open it to set a new password; it works for one hour." }; }
+          else if (r.status === 429) auth.msg = { ko: "요청이 너무 잦습니다. 몇 분 뒤 다시 시도하세요.", en: "Too many requests. Try again in a few minutes." };
+          else auth.msg = { ko: "메일을 보내지 못했습니다 (" + r.status + "). 잠시 뒤 다시 시도하거나 관리자에게 알려 주세요.", en: "Couldn't send the email (" + r.status + "). Try again later or tell the admin." };
+          render();
+        }).catch(function () { auth.busy = false; auth.msg = { ko: "인터넷 연결을 확인하세요.", en: "Check your connection." }; render(); });
+      return;
+    }
+    var pw = form.querySelector('[name="password"]').value, pw2 = form.querySelector('[name="password2"]').value;
+    if (pw !== pw2) { auth.msg = { ko: "두 비밀번호가 다릅니다.", en: "The passwords don't match." }; render(); return; }
+    auth.busy = true; render();
+    var rc = auth.recovery;
+    sbFetch("/auth/v1/user", { method: "PUT", token: rc.access_token, body: { password: pw } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }, function () { return { ok: r.ok, status: r.status, j: {} }; }); })
+      .then(function (res) {
+        auth.busy = false;
+        if (res.ok) {
+          saveSession({ access_token: rc.access_token, refresh_token: rc.refresh_token, expires_in: rc.expires_in, user: res.j });
+          auth.recovery = null; auth.step = "signin"; auth.msgOk = true;
+          auth.msg = { ko: "비밀번호를 바꿨습니다. 이제 새 비밀번호로 로그인됩니다.", en: "Password changed. You're signed in with the new one." };
+          return fetchServerPro().then(function (p) { pro = p; render(); }, function () { if (auth.member == null) auth.member = false; render(); });
+        }
+        var m = String((res.j && (res.j.msg || res.j.message || res.j.error_description)) || "");
+        auth.msg = /same|different/i.test(m) ? { ko: "예전과 다른 비밀번호를 정해 주세요.", en: "Choose a password different from your old one." }
+          : /weak|at least|short/i.test(m) ? { ko: "비밀번호가 너무 짧거나 약합니다.", en: "That password is too short or weak." }
+          : res.status === 401 || res.status === 403 ? { ko: "링크가 만료됐습니다. 비밀번호 찾기에서 다시 요청하세요.", en: "The link expired. Request a new one." }
+          : { ko: "바꾸지 못했습니다 (" + res.status + "). 다시 시도하세요.", en: "Couldn't change it (" + res.status + "). Try again." };
+        if (res.status === 401 || res.status === 403) { auth.recovery = null; auth.step = "forgot"; }
+        render();
+      }).catch(function () { auth.busy = false; auth.msg = { ko: "인터넷 연결을 확인하세요.", en: "Check your connection." }; render(); });
+  }
+
   // 휴대폰 웹앱 잠금 (app/web/build.py가 window.FED_GATE=true를 넣는다): 로그인해야 화면이 열린다.
   // 무료 계정은 무료 화면, PRO 회원(pro_members)은 PRO 폴더까지. 화면만 가리는 장치라 공개 데이터 파일 자체를 숨기지는 않는다.
   function gateOn() { return !!window.FED_GATE && serverOn() && !(auth.session && auth.member != null); }
@@ -2288,13 +2364,14 @@
         '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" +
         t(auth.busy ? { ko: "확인 중…", en: "Checking…" } : signup ? { ko: "가입하고 들어가기", en: "Sign up and enter" } : { ko: "들어가기", en: "Enter" }) + "</button>" +
         '<button type="button" class="linkbtn" data-auth="' + (signup ? "tosignin" : "tosignup") + '">' +
-        t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (무료 가입)", en: "New here? Sign up free" }) + "</button></div></form>";
+        t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (무료 가입)", en: "New here? Sign up free" }) + "</button>" + (signup ? "" : forgotLink()) + "</div></form>";
     }
     return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
       '<section class="card gate-card"><h1>' + t(UI.title) + "</h1>" +
       '<p class="sub">' + t({ ko: "로그인하면 무료 화면을 볼 수 있습니다. 경제학자·자산·환율 폴더는 PRO 회원만 열립니다.", en: "Sign in to see the free screens. Economist, asset and currency folders are for PRO members." }) + "</p>" + body + msg + "</section></div>";
   }
   function render() {
+    if (acctOn()) { app.innerHTML = acctView(); setLang(root.lang); return; }
     if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
     var body;
     if (window.__FED_ALL__ && pro) {
@@ -2345,6 +2422,7 @@
   }
 
   function renderState(titlePair, bodyPair) {
+    if (acctOn()) { app.innerHTML = acctView(); setLang(root.lang); return; }
     if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
     app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + '<div class="state"><b>' + t(titlePair) + "</b>" +
       (bodyPair ? t(bodyPair) : "") + "</div></div>";
@@ -2381,6 +2459,7 @@
   // ---------- PRO 로그인 (Supabase: 이메일 + 비밀번호. 메일 발송(SMTP) 없이 동작) ----------
   var SB = window.FED_SUPABASE || {}, SESSION = "fed-pro-session";
   var auth = { session: null, step: "signin", email: "", msg: null, busy: false, member: null };
+  readRecoveryLink();  // 비밀번호 재설정 메일의 링크로 들어왔는지
   // 로그인은 앱이 켜져 있는 동안만 유지한다 (앱을 열 때마다 PRO는 다시 로그인). 예전에 저장된 로그인 정보는 지운다
   try { localStorage.removeItem(SESSION); } catch (err) {}
   // 공유용 페이지(파일 하나로 내보낸 것)에는 PRO 데이터를 넣지 않는다. 탭은 보여 주되 앱 안내만 띄운다
@@ -2459,7 +2538,7 @@
         "<label>" + t(signup ? { ko: "비밀번호 (6자 이상)", en: "Password (6+ characters)" } : { ko: "비밀번호", en: "Password" }) + "</label>" +
         '<input name="password" type="password" minlength="6" required autocomplete="' + (signup ? "new-password" : "current-password") + '">' +
         '<div class="btn-row"><button type="submit" class="refresh"' + (auth.busy ? " disabled" : "") + ">" + t(signup ? { ko: "가입하기", en: "Create account" } : { ko: "로그인", en: "Sign in" }) + "</button>" +
-        '<button type="button" class="linkbtn" data-auth="' + (signup ? "tosignin" : "tosignup") + '">' + t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (가입)", en: "New here? Create an account" }) + "</button></div></form>";
+        '<button type="button" class="linkbtn" data-auth="' + (signup ? "tosignin" : "tosignup") + '">' + t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (가입)", en: "New here? Create an account" }) + "</button>" + (signup ? "" : forgotLink()) + "</div></form>";
     }
     return '<section class="card"><h2>' + t({ ko: "PRO 로그인", en: "PRO sign-in" }) + ' <span class="pro-badge">PRO</span></h2>' +
       '<p class="sub">' + t({ ko: "경제학자·자산·환율 폴더는 PRO 회원 전용입니다. 이메일과 비밀번호로 로그인하세요. 데이터는 3시간마다 갱신됩니다.",
@@ -2525,7 +2604,7 @@
   // ---------- 이벤트 ----------
   app.addEventListener("submit", function (e) {
     var f = e.target.closest("[data-authform]");
-    if (f) { e.preventDefault(); authSubmit(f); }
+    if (f) { e.preventDefault(); if (f.dataset.authform === "forgot" || f.dataset.authform === "newpw") recoverySubmit(f); else authSubmit(f); }
   });
   function onCalcInput(e) {
     var x = e.target.closest && e.target.closest("[data-calc]");
@@ -2552,7 +2631,8 @@
       var act = ab0.dataset.auth;
       if (act === "logout") { saveSession(null); pro = null; auth.member = null; auth.nodata = false; auth.step = "signin"; render(); }
       else if (act === "tosignup") { auth.step = "signup"; auth.msg = null; render(); }
-      else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; render(); }
+      else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
+      else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }
       else if (act === "retry") { fetchServerPro().then(function (p) { pro = p; render(); }); }
       return;
     }
