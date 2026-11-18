@@ -749,20 +749,31 @@
           item("overview", UI.tabOverview, us, false, { ko: "다음 FOMC 전망", en: "Next FOMC outlook" }) +
           cl.slice().sort(function (a, b) { var pn = pins(); return (pn.indexOf(a.tab) < 0) - (pn.indexOf(b.tab) < 0); }).map(function (x) { return item(x.tab, x.name, x.rate, false, x.bank); }).join(""),
           { ko: "회색 글씨: 다음 금리 결정일 · 남은 날", en: "Grey: next decision date · days left" }],
-        [{ ko: "PRO 폴더", en: "PRO folders" }, proOn ? item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
+        [{ ko: "PRO 폴더", en: "PRO folders" }, proOn ? item("proall", { ko: "전체", en: "All PRO" }, "", true, { ko: "세 폴더의 지금 신호 한눈에", en: "Every PRO signal at a glance" }) + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO 전체", en: "PRO overview" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
+      // 세 '전체' 화면(홈·나라별 금리·PRO)에서는 나머지 두 '전체'로 가는 버튼을 메뉴 옆에 둔다
+      var ALLS = [["all", { ko: "전체", en: "Home" }, true], ["countries", { ko: "나라별 금리", en: "Countries" }, !!cl.length], ["proall", { ko: "PRO 전체", en: "PRO" }, !!proOn]];
+      var gos = ALLS.some(function (x) { return x[0] === view.tab; }) ? ALLS.filter(function (x) { return x[0] !== view.tab && x[2]; }).map(function (x) {
+        return '<button type="button" class="mbar-go" data-tab="' + x[0] + '">' + t(x[1]) + ' <span aria-hidden="true">›</span></button>';
+      }).join("") : "";
       tabs = '<nav class="mbar" data-html2canvas-ignore><button type="button" class="mn-btn" data-menu aria-expanded="false" aria-controls="mn-sheet" aria-label="' + esc(tt({ ko: "메뉴 열기", en: "Open menu" })) + '">' +
-        '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button><span class="mbar-cur">' + t(curName) + "</span>" +
-        (view.tab === "all" && cl.length ? '<button type="button" class="mbar-go" data-tab="countries">' + t({ ko: "나라별 금리", en: "Countries" }) + ' <span aria-hidden="true">›</span></button>' : "") + "</nav>" +
+        '<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
+        (view.tab === "proall" ? '<button type="button" class="mn-btn mn-pro" data-menu-pro aria-expanded="false" aria-controls="mn-pro" aria-label="' + esc(tt({ ko: "PRO 메뉴 열기", en: "Open PRO menu" })) + '">PRO</button>' : "") +
+        '<span class="mbar-cur">' + t(curName) + "</span>" + (gos ? '<span class="mbar-gos">' + gos + "</span>" : "") + "</nav>" +
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
-        "</div></div>";
+        "</div></div>" +
+        (view.tab === "proall" && proOn ? '<div class="mn-sheet" data-html2canvas-ignore id="mn-pro" role="dialog" aria-modal="true" aria-label="PRO" hidden><div class="mn-inner">' +
+          '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
+          '<div class="mn-group">' + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
+          ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
+          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") + "</div></div></div>" : "");
     }
     return "<header><div class=\"brand\"><h1>" + t(UI.title) + "</h1>" +
       (data ? '<span class="meta">' + t(UI.asof, { d: data.meta.generated }) + (fromCache ? " · " + t(UI.offline) : "") + "</span>" : "") +
@@ -974,6 +985,63 @@
   }
 
   // 지금과 가장 비슷했던 과거 (analogs.py)
+  // PRO 전체: 세 폴더의 지금 신호를 한 화면에 (각 줄을 누르면 그 폴더로)
+  function proAllView() {
+    var row = function (go, name, chipHtml, right, sub) {
+      return '<button type="button" class="pa-row" data-go="' + go + '"><span class="pa-l"><span class="pa-nm">' + t(name) + "</span>" +
+        (sub ? '<span class="pa-sub">' + sub + "</span>" : "") + '</span><span class="pa-r">' + chipHtml + (right ? '<span class="pa-k">' + right + "</span>" : "") +
+        '<span class="mn-chev" aria-hidden="true">›</span></span></button>';
+    };
+    // 과거에 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향으로 간 비율
+    var dirProb = function (a) {
+      var o = a.outlook, sg = a.ours.now.signal;
+      if (!o || !o.same || sg == null) return "";
+      var v = sg > 0 ? o.same.up : sg < 0 ? o.same.down : o.same.flat;
+      return t({ ko: "그대로 간 비율 " + pct(v), en: pct(v) + " went that way" });
+    };
+    var hit = function (sc) { return sc && sc.hit != null ? t({ ko: "적중 " + pct(sc.hit), en: pct(sc.hit) + " hit" }) : ""; };
+    // 1) 경제학자 신호 (나라별 '우리 공식')
+    var regs = [["us", pro], ["kr", pro.kr], ["ea", pro.ea], ["jp", pro.jp], ["ch", pro.ch], ["sg", pro.sg]].filter(function (x) { return x[1] && x[1].ours && x[1].ours.now; });
+    var nameOf = {}; REGIONS.forEach(function (x) { nameOf[x[0]] = x[1]; });
+    var econ = regs.map(function (x) {
+      var o = x[1].ours, n = o.now;
+      return row("pro:" + x[0], nameOf[x[0]], chip(n.signal, x[0] === "sg"),
+        t({ ko: n.total + "개 중 " + n.agree + "개 동의", en: n.agree + " of " + n.total + " agree" }), hit(o.score_recent || o.score) + (n.asof ? " · " + esc(n.asof) : ""));
+    }).join("");
+    // 2) 자산 6개월 전망
+    var assets = ["au", "ol", "sp"].filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
+      var a = pro[k];
+      return row("assets:" + k, a.meta.name, chip(a.ours.now.signal, "asset"), dirProb(a), hit(a.ours.score_recent || a.ours.score));
+    }).join("");
+    // 3) 환율 6개월 전망
+    var fxs = FX_PAIRS.filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
+      var a = pro[k];
+      return row("fxpro:" + k, a.meta.name, chip(a.ours.now.signal, "asset"), dirProb(a), hit(a.ours.score_recent || a.ours.score));
+    }).join("");
+    // 4) 비슷했던 과거
+    var an = pro.analogs, anH = "";
+    if (an && an.top && an.top.length) {
+      var av = an.top10_avg || {}, f = function (k, u) { var v = av[k] && av[k].mean; return v == null ? "–" : num(v, u === "%" ? 1 : 2, true) + (u === "%" ? "%" : "%p"); };
+      anH = row("pro:us", { ko: "가장 비슷했던 때: " + an.top[0].month, en: "Closest match: " + an.top[0].month }, "", "",
+        t({ ko: "비슷한 10개 시기의 " + an.horizon + "개월 뒤 평균 — 금리 " + f("rate", "p") + " · 금 " + f("gold", "%") + " · S&P " + f("spx", "%"),
+            en: "Avg. " + an.horizon + " months after the 10 closest — rate " + f("rate", "p") + " · gold " + f("gold", "%") + " · S&P " + f("spx", "%") }));
+    }
+    // 5) 연준 위원 성향
+    var ms = pro.members, mH = "";
+    if (ms && ms.length) {
+      var hk = ms[0], dv = ms[ms.length - 1], sg = function (v) { return (v >= 0 ? "+" : "") + v.toFixed(2); };
+      mH = row("pro:us", { ko: "연준 위원 발언 성향", en: "Fed officials' leanings" }, "", "",
+        t({ ko: "가장 매파 " + hk.name + " (" + sg(hk.tone) + ")" + (ms.length > 1 ? " · 가장 비둘기 " + dv.name + " (" + sg(dv.tone) + ")" : ""),
+            en: "Most hawkish " + hk.name + " (" + sg(hk.tone) + ")" + (ms.length > 1 ? " · most dovish " + dv.name + " (" + sg(dv.tone) + ")" : "") }));
+    }
+    var card = function (title, sub, body) { return body ? '<section class="card"><h2>' + t(title) + '</h2>' + (sub ? '<p class="sub">' + t(sub) + "</p>" : "") + '<div class="pa-list">' + body + "</div></section>" : ""; };
+    return card({ ko: "경제학자 신호", en: "Economist signals" }, { ko: "나라마다 유명 경제학자 금리 공식들을 합친 '우리 공식'이 지금 가리키는 방향입니다. 적중률은 최근 기간 기준입니다.", en: "Where our blend of famous economists' rate formulas points now, by country. Hit rates are for the recent period." }, econ) +
+      card({ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, { ko: "'그대로 간 비율'은 과거에 지금과 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향(상승·보합·하락)이었던 비율입니다.", en: "'Went that way' = share of past cases with today's signal where the price actually did that over six months." }, assets) +
+      card({ ko: "환율 6개월 전망", en: "Currencies: six-month outlook" }, { ko: "'상승'은 각 통화쌍 숫자가 오른다는 뜻입니다 (예: 원/달러 상승 = 원화 약세).", en: "'Rise' means the quoted number goes up (e.g. USD/KRW up = weaker won)." }, fxs) +
+      card({ ko: "미국 참고", en: "US extras" }, null, anH + mH) +
+      "<footer><p>" + proDisc() + "</p><p>" + t(UI.disc1) + "</p></footer>";
+  }
+
   function analogHtml(a) {
     if (!a || !a.top || !a.top.length) return "";
     var pc = function (v, u) { return v == null ? "–" : num(v, u === "%" ? 1 : 2, true) + (u === "%" ? "%" : "%p"); };
@@ -1379,10 +1447,13 @@
     });
   }
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeZoom(); openMenu(false); } });
-  function openMenu(on) {
-    var sh = document.getElementById("mn-sheet"), btn = app.querySelector("[data-menu]");
+  var menuOpen = null;
+  function openMenu(on, id) {
+    if (!on) id = menuOpen;
+    var sh = id && document.getElementById(id), btn = app.querySelector(id === "mn-pro" ? "[data-menu-pro]" : "[data-menu]");
     if (!sh) return;
     sh.hidden = !on;
+    menuOpen = on ? id : null;
     document.documentElement.classList.toggle("mn-open", on);
     if (btn) btn.setAttribute("aria-expanded", String(on));
     if (on) { var c = sh.querySelector(".mn-item.cur") || sh.querySelector(".mn-x"); if (c) c.focus(); } else if (btn) btn.focus();
@@ -2194,9 +2265,9 @@
       body = hkView(data.hk);
     } else if (view.tab === "sg" && data.sg) {
       body = sgView(data.sg);
-    } else if ((view.tab === "assets" || view.tab === "pro" || view.tab === "fxpro") && proLocked()) {
+    } else if ((view.tab === "assets" || view.tab === "pro" || view.tab === "fxpro" || view.tab === "proall") && proLocked()) {
       body = lockedView();
-    } else if ((view.tab === "assets" || view.tab === "pro" || view.tab === "fxpro") && !pro && serverOn()) {
+    } else if ((view.tab === "assets" || view.tab === "pro" || view.tab === "fxpro" || view.tab === "proall") && !pro && serverOn()) {
       body = loginView();
     } else if (view.tab === "fxpro" && pro && pro[view.fxp || "kw"]) {
       var ff = view.folder && findFolder(view.folder);
@@ -2207,6 +2278,8 @@
     } else if (view.tab === "pro" && pro) {
       var f = view.folder && findFolder(view.folder);
       body = f ? folderDetail(f) : proOverview();
+    } else if (view.tab === "proall" && pro) {
+      body = proAllView();
     } else if (view.tab === "calc" && data.fx) {
       body = calcView();
     } else if (view.tab === "countries" && countryList().length) {
@@ -2389,7 +2462,7 @@
       .then(function (j) { if (!j || j.tier !== "pro" || !j.folders) throw new Error("pro"); return j; }));
     proJob.then(function (p) {
       pro = p;
-      if (!pro && !serverOn() && (view.tab === "pro" || view.tab === "assets" || view.tab === "fxpro")) view.tab = "overview";
+      if (!pro && !serverOn() && (view.tab === "pro" || view.tab === "assets" || view.tab === "fxpro" || view.tab === "proall")) view.tab = "overview";
       if (data) render();
     });
     Promise.all(jobs).then(function (got) {
@@ -2439,7 +2512,15 @@
       else if (act === "retry") { fetchServerPro().then(function (p) { pro = p; render(); }); }
       return;
     }
-    if (e.target.closest("[data-menu]")) { openMenu(true); return; }
+    if (e.target.closest("[data-menu]")) { openMenu(true, "mn-sheet"); return; }
+    if (e.target.closest("[data-menu-pro]")) { openMenu(true, "mn-pro"); return; }
+    var gob = e.target.closest("[data-go]");
+    if (gob) {  // PRO 전체의 줄: "탭:세부" (pro:kr, assets:au, fxpro:kw)
+      var gp = gob.dataset.go.split(":");
+      view.tab = gp[0]; view.folder = null;
+      if (gp[0] === "pro") view.region = gp[1]; else if (gp[0] === "assets") view.asset = gp[1]; else if (gp[0] === "fxpro") view.fxp = gp[1];
+      render(); scrollTo(0, 0); return;
+    }
     if (e.target.closest("[data-menu-close]") || e.target.classList.contains("mn-sheet")) { openMenu(false); return; }
     var cp = e.target.closest("[data-cpick]");
     if (cp) {
@@ -2469,7 +2550,7 @@
     }
     var tb = e.target.closest("[data-tab]");
     if (tb) {
-      document.documentElement.classList.remove("mn-open");
+      document.documentElement.classList.remove("mn-open"); menuOpen = null;
       view.tab = tb.dataset.tab; view.folder = null;
       render(); scrollTo(0, 0); return;
     }
