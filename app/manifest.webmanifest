@@ -1,0 +1,16 @@
+{
+  "name": "연준 금리 전망",
+  "short_name": "금리 전망",
+  "description": "미국 연준과 주요국 금리 전망, 결정 일정, 환율·대출 계산기",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#14284b",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
