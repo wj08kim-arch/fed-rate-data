@@ -2136,28 +2136,28 @@
       "<footer><p>" + proDisc() + "</p></footer>";
   }
 
-  // 휴대폰 웹앱 잠금 (app/web/build.py가 window.FED_GATE=true를 넣는다): 승인된 회원이 로그인해야 화면이 열린다.
-  // 화면만 가리는 장치라, 공개 데이터 파일 자체를 숨기지는 않는다.
-  function gateOn() { return !!window.FED_GATE && serverOn() && !(auth.session && auth.member === true); }
+  // 휴대폰 웹앱 잠금 (app/web/build.py가 window.FED_GATE=true를 넣는다): 로그인해야 화면이 열린다.
+  // 무료 계정은 무료 화면, PRO 회원(pro_members)은 PRO 폴더까지. 화면만 가리는 장치라 공개 데이터 파일 자체를 숨기지는 않는다.
+  function gateOn() { return !!window.FED_GATE && serverOn() && !(auth.session && auth.member != null); }
   function gateView() {
     var s = auth.session, msg = auth.msg ? '<p class="note warn">' + t(auth.msg) + "</p>" : "", body;
-    if (s && auth.member === false) {
-      body = '<p class="lead-p">' + t({ ko: s.email + " 계정은 아직 승인되지 않았습니다. 관리자에게 승인을 요청하세요.", en: s.email + " hasn't been approved yet. Ask the admin for access." }) + "</p>" +
-        '<div class="btn-row"><button type="button" class="refresh" data-auth="retry">' + t({ ko: "다시 확인", en: "Check again" }) + "</button>" +
-        '<button type="button" class="refresh" data-auth="logout">' + t({ ko: "다른 계정으로", en: "Use another account" }) + "</button></div>";
-    } else if (s && auth.member == null) {
+    var signup = auth.step === "signup";
+    if (s) {
       body = '<p class="lead-p">' + t({ ko: "확인 중…", en: "Checking…" }) + "</p>";
     } else {
-      body = '<form class="authf" data-authform="signin">' +
+      body = '<form class="authf" data-authform="' + (signup ? "signup" : "signin") + '">' +
         "<label>" + t({ ko: "이메일", en: "Email" }) + "</label>" +
         '<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" value="' + esc(auth.email) + '">' +
-        "<label>" + t({ ko: "비밀번호", en: "Password" }) + "</label>" +
-        '<input name="password" type="password" minlength="6" required autocomplete="current-password">' +
-        '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" + t(auth.busy ? { ko: "확인 중…", en: "Checking…" } : { ko: "들어가기", en: "Enter" }) + "</button></div></form>";
+        "<label>" + t(signup ? { ko: "비밀번호 (6자 이상)", en: "Password (6+ characters)" } : { ko: "비밀번호", en: "Password" }) + "</label>" +
+        '<input name="password" type="password" minlength="6" required autocomplete="' + (signup ? "new-password" : "current-password") + '">' +
+        '<div class="btn-row"><button type="submit" class="refresh gate-go"' + (auth.busy ? " disabled" : "") + ">" +
+        t(auth.busy ? { ko: "확인 중…", en: "Checking…" } : signup ? { ko: "가입하고 들어가기", en: "Sign up and enter" } : { ko: "들어가기", en: "Enter" }) + "</button>" +
+        '<button type="button" class="linkbtn" data-auth="' + (signup ? "tosignin" : "tosignup") + '">' +
+        t(signup ? { ko: "이미 계정이 있어요", en: "I have an account" } : { ko: "처음이에요 (무료 가입)", en: "New here? Sign up free" }) + "</button></div></form>";
     }
     return '<div class="wrap gate"><div class="gate-top"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="ko">한국어</button><button type="button" data-lang="en">EN</button></div></div>' +
       '<section class="card gate-card"><h1>' + t(UI.title) + "</h1>" +
-      '<p class="sub">' + t({ ko: "승인된 회원만 볼 수 있습니다. 이메일과 비밀번호를 입력하세요.", en: "For approved members only. Enter your email and password." }) + "</p>" + body + msg + "</section></div>";
+      '<p class="sub">' + t({ ko: "로그인하면 무료 화면을 볼 수 있습니다. 경제학자·자산·환율 폴더는 PRO 회원만 열립니다.", en: "Sign in to see the free screens. Economist, asset and currency folders are for PRO members." }) + "</p>" + body + msg + "</section></div>";
   }
   function render() {
     if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
@@ -2345,7 +2345,7 @@
         var j = res.j || {};
         if (res.ok && j.access_token) {
           saveSession(j); auth.step = "signin";
-          return fetchServerPro().then(function (p) { pro = p; render(); });
+          return fetchServerPro().then(function (p) { pro = p; render(); }, function () { if (auth.member == null) auth.member = false; render(); });
         }
         var m = String(j.msg || j.error_description || j.message || "");
         if (res.ok && kind === "signup") auth.msg = { ko: "가입됐지만 이메일 확인이 켜져 있어 바로 로그인되지 않았습니다. 관리자에게 알려 주세요.", en: "Account created, but email confirmation is on, so you aren't signed in yet. Tell the admin." };
