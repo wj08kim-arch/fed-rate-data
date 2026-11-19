@@ -832,6 +832,9 @@
           return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
         }).join("") + "</div></div>" +
+        (auth.session ? '<div class="mn-group"><button type="button" class="mn-item mn-logout" data-auth="logout">' +
+          '<span class="mn-l"><span class="mn-nm">' + t({ ko: "로그아웃", en: "Sign out" }) + '</span><span class="mn-sub">' + esc(auth.session.email || "") + "</span></span>" +
+          '<span class="mn-r"><span class="mn-chev" aria-hidden="true">›</span></span></button></div>' : "") +
         "</div></div>" +
         (proTab && proOn ? '<div class="mn-sheet" data-html2canvas-ignore id="mn-pro" role="dialog" aria-modal="true" aria-label="PRO" hidden><div class="mn-inner">' +
           '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
@@ -2691,7 +2694,7 @@
     var ab0 = e.target.closest("[data-auth]");
     if (ab0) {
       var act = ab0.dataset.auth;
-      if (act === "logout") { saveSession(null); pro = null; auth.member = null; auth.nodata = false; auth.step = "signin"; render(); }
+      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.nodata = false; auth.step = "signin"; render(); }
       else if (act === "tosignup") { auth.step = "signup"; auth.msg = null; render(); }
       else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
       else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }

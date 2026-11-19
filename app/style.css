@@ -723,3 +723,4 @@ header .hdr-right { flex: none; margin-left: auto; }
 .splash .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .splash .spin { animation: none; } }
+.mn-logout .mn-nm { color: var(--ink-2); }
