@@ -66,6 +66,9 @@
     tabJP: { ko: "일본은행", en: "Bank of Japan" },
     tabCN: { ko: "중국인민은행", en: "PBoC" },
     tabCH: { ko: "스위스(SNB)", en: "SNB" },
+    tabGB: { ko: "영국(BoE)", en: "Bank of England" },
+    tabCA: { ko: "캐나다(BoC)", en: "Bank of Canada" },
+    tabAUS: { ko: "호주(RBA)", en: "RBA (Australia)" },
     tabSG: { ko: "싱가포르", en: "Singapore" },
     tabPro: { ko: "경제학자 폴더", en: "Economist folders" },
     asof: { ko: "{d} 기준", en: "As of {d}" },
@@ -164,9 +167,10 @@
       var names = [], lit = k.replace(/\{\w+\}/g, "").length;
       var src = k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(\w+)\}/g, function (_, n) { names.push(n); return "(.+?)"; });
       if (lit < 2) return;  // 자리표시자뿐인 틀은 모든 문장에 걸린다
-      try { out.push({ re: new RegExp("^" + src + "$"), names: names, to: d[k], lit: lit }); } catch (e) {}
+      var segs = k.split(/\{\w+\}/).filter(function (x) { return x.trim(); }).length;  // 고정 문구 조각이 많은 틀을 먼저 ("Bank of Korea {d}"보다 "{b} outlook: {a} → {c}")
+      try { out.push({ re: new RegExp("^" + src + "$"), names: names, to: d[k], lit: lit, segs: segs }); } catch (e) {}
     });
-    out.sort(function (a, b) { return b.lit - a.lit; });
+    out.sort(function (a, b) { return (b.segs - a.segs) || (b.lit - a.lit); });
     return (TPL[l] = out);
   }
   function trx(l, en, depth) {  // 영어 원문 → l 언어 (사전에 없으면 영어 그대로)
@@ -365,6 +369,9 @@
     add("cn", UI.tabCN, data.cn);
     add("korea", UI.tabKorea, data.korea);
     add("ch", UI.tabCH, data.ch);
+    add("gb", UI.tabGB, data.gb);
+    add("ca", UI.tabCA, data.ca);
+    add("aus", UI.tabAUS, data.aus);
     if (data.hk) rows.push({ tab: "hk", name: UI.tabHK, rate: num(data.hk.now.base) + "%", sig: usSig, kind: "outlook",
                              why: { ko: "연준을 그대로 따라감", en: "Follows the Fed" } });
     if (data.sg) {
@@ -613,15 +620,36 @@
     if (push.checked || !pushSupported()) return;
     push.checked = true;
     navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
-      .then(function (sub) { push.on = !!sub; if (view.tab === "all" && data) render(); }, function () {});
+      .then(function (sub) { push.on = !!sub; if ((view.tab === "all" || view.tab === "setalert") && data) render(); }, function () {});
   }
+  // 알림 종류와 '밤에는 받지 않기' (이 기기에 저장하고, 알림을 켠 기기면 서버에도 보낸다)
+  var NOTIF_KEY = "fed-dash-notif";
+  var NOTIF_KINDS = [
+    ["eve", { ko: "금리 결정 하루 전", en: "The day before a rate decision" }],
+    ["res", { ko: "결정 결과 (우리 전망 적중 여부)", en: "Decision results (and whether our call was right)" }],
+    ["odds", { ko: "연준 전망이 크게 바뀔 때", en: "When the Fed outlook shifts a lot" }],
+    ["flash", { ko: "미국 물가·고용 지표 발표 직후", en: "Right after US inflation and jobs releases" }],
+    ["week", { ko: "월요일 주간 요약", en: "Monday weekly summary" }]
+  ];
+  function notifCfg() {
+    var c = null;
+    try { c = JSON.parse(localStorage.getItem(NOTIF_KEY) || "null"); } catch (e) {}
+    c = c || {};
+    return { kinds: Array.isArray(c.kinds) ? c.kinds : NOTIF_KINDS.map(function (k) { return k[0]; }), quiet: !!c.quiet };
+  }
+  function notifSet(c) { try { localStorage.setItem(NOTIF_KEY, JSON.stringify(c)); } catch (e) {} pushSync(); }
+  function userTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul"; } catch (e) { return "Asia/Seoul"; } }
   function pushSave(sub) {
     return freshToken().then(function (tok) {
       if (!tok) throw new Error("signed out");
-      var j = sub.toJSON();
-      return sbFetch("/rest/v1/push_subs", { method: "POST", token: tok, prefer: "resolution=merge-duplicates",
-        body: { endpoint: j.endpoint, user_id: jwtSub(tok), p256dh: j.keys.p256dh, auth: j.keys.auth, lang: root.lang, pins: pins(), updated_at: new Date().toISOString() } })
-        .then(function (r) { if (!r.ok) throw new Error(String(r.status)); });
+      var j = sub.toJSON(), c = notifCfg();
+      var body = { endpoint: j.endpoint, user_id: jwtSub(tok), p256dh: j.keys.p256dh, auth: j.keys.auth, lang: root.lang, pins: pins(), updated_at: new Date().toISOString() };
+      var full = Object.assign({ kinds: c.kinds, quiet: c.quiet, tz: userTz() }, body);
+      var post = function (b) { return sbFetch("/rest/v1/push_subs", { method: "POST", token: tok, prefer: "resolution=merge-duplicates", body: b }); };
+      return post(full).then(function (r) {
+        if (r.status === 400) return post(body);  // 서버에 supabase/prefs.sql 을 아직 안 돌렸으면 예전 칸만 저장
+        return r;
+      }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); });
     });
   }
   function pushSync() {  // 언어·★ 고정이 바뀌면 서버의 알림 설정도 맞춘다
@@ -661,7 +689,60 @@
     return head + (push.msg ? '<p class="note">' + t(push.msg) + "</p>" : "") + '</div><button type="button" class="tgl" data-push aria-pressed="' + push.on + '"' + (push.busy ? " disabled" : "") + ">" +
       t(push.busy ? { ko: "…", en: "…" } : push.on ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></section>";
   }
-  function alertsAvail() { return extOn() || (pwa.on && serverOn() && !!window.FED_VAPID_PUBLIC); }
+  var mail = { on: null, busy: false, msg: null, loading: false };
+  function mailLoad() {
+    if (mail.loading || mail.on !== null || !auth.session) return;
+    mail.loading = true;
+    freshToken().then(function (tok) {
+      if (!tok) return;
+      return sbFetch("/rest/v1/user_prefs?select=weekly_email&user_id=eq." + jwtSub(tok), { token: tok }).then(function (r) {
+        if (!r.ok) { mail.on = false; mail.msg = r.status === 404 ? { ko: "서버 설정이 아직 끝나지 않았습니다 (관리자: supabase/prefs.sql).", en: "Server setup isn't finished yet (admin: supabase/prefs.sql)." } : null; return; }
+        return r.json().then(function (rows) { mail.on = !!(rows[0] && rows[0].weekly_email); });
+      });
+    }).catch(function () { mail.on = false; }).then(function () { mail.loading = false; if (view.tab === "setalert") render(); });
+  }
+  function mailSave(on) {
+    return freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      return sbFetch("/rest/v1/user_prefs", { method: "POST", token: tok, prefer: "resolution=merge-duplicates",
+        body: { user_id: jwtSub(tok), weekly_email: on, lang: root.lang, updated_at: new Date().toISOString() } });
+    }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); });
+  }
+  function mailToggle() {
+    if (mail.busy) return;
+    var to = !mail.on;
+    mail.busy = true; mail.msg = null; render();
+    mailSave(to).then(function () { mail.on = to; mail.msg = to ? { ko: "매주 월요일 아침 이메일로 보내 드립니다.", en: "We'll email you every Monday morning." } : null; },
+      function () { mail.msg = { ko: "저장하지 못했습니다. 잠시 뒤 다시 시도하세요.", en: "Couldn't save. Try again shortly." }; })
+      .then(function () { mail.busy = false; render(); });
+  }
+  function mailSync() { if (mail.on) mailSave(true).catch(function () {}); }  // 언어를 바꾸면 이메일 언어도 맞춘다
+  function notifView() {  // 설정 → 알림 화면
+    var out = alertBox();
+    if (push.on && pushSupported()) {
+      var c = notifCfg();
+      out += '<section class="card"><h2>' + t({ ko: "받을 알림", en: "Which notifications" }) + '</h2><p class="sub">' +
+        t({ ko: "이 기기에서 받을 알림을 고르세요. 미국 연준 알림은 항상, 다른 나라는 ★로 고정한 나라만 옵니다.", en: "Choose what this device receives. Fed alerts always come; other countries only if starred." }) + '</p><ul class="he-list">' +
+        NOTIF_KINDS.map(function (k) {
+          var on = c.kinds.indexOf(k[0]) >= 0;
+          return '<li class="he-row' + (on ? "" : " off") + '"><span class="he-nm">' + t(k[1]) + '</span><span class="he-ctl"><button type="button" class="tgl" data-nk="' + k[0] + '" aria-pressed="' + on + '">' +
+            t(on ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></span></li>";
+        }).join("") +
+        '<li class="he-row"><span class="he-nm">' + t({ ko: "밤에는 받지 않기 (밤 10시~아침 7시)", en: "No alerts at night (10pm–7am)" }) + '</span><span class="he-ctl"><button type="button" class="tgl" data-nq aria-pressed="' + c.quiet + '">' +
+        t(c.quiet ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></span></li></ul>" +
+        '<p class="note">' + t({ ko: "밤 시간에 나온 알림은 건너뜁니다(나중에 다시 보내지 않음). 시간은 이 기기의 시간대 기준입니다.", en: "Alerts that come out at night are skipped (not sent later). Times follow this device's time zone." }) + "</p></section>";
+    }
+    if (serverOn() && auth.session) {
+      mailLoad();
+      out += '<section class="card alertbox"><div><h2>' + t({ ko: "주간 요약 이메일", en: "Weekly summary email" }) + '</h2><p class="sub">' +
+        t({ ko: "매주 월요일 아침, 지난주 금리 결정·전망 변화·환율을 요약해 로그인한 이메일로 보내 드립니다.", en: "Every Monday morning we email a summary of last week's rate decisions, outlook changes and currencies to your sign-in address." }) +
+        '</p><p class="note">' + esc(auth.session.email || "") + "</p>" + (mail.msg ? '<p class="note">' + t(mail.msg) + "</p>" : "") +
+        '</div><button type="button" class="tgl" data-mail aria-pressed="' + !!mail.on + '"' + (mail.busy || mail.on === null ? " disabled" : "") + ">" +
+        t(mail.busy || mail.on === null ? { ko: "…", en: "…" } : mail.on ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></section>";
+    }
+    return out || '<section class="card"><p class="sub">' + t({ ko: "이 화면에서는 알림을 켤 수 없습니다. 휴대폰 홈 화면에 설치한 앱에서 켜 주세요.", en: "Notifications can't be turned on here. Use the app installed on your phone's home screen." }) + "</p></section>";
+  }
+  function alertsAvail() { return extOn() || (pwa.on && serverOn() && !!window.FED_VAPID_PUBLIC) || (serverOn() && !!auth.session); }
   function alertBox() {
     if (!extOn()) return phonePushBox();
     return '<section class="card alertbox"><div><h2>' + t({ ko: "알림", en: "Alerts" }) + '</h2><p class="sub">' +
@@ -958,6 +1039,9 @@
     });
     if (data.korea) out.push({ tab: "korea", name: UI.tabKorea, bank: { ko: "한국은행 기준금리", en: "BOK base rate" }, rate: num(data.korea.now.base) + "%", sub: lc(data.korea.now) });
     if (data.ch) out.push({ tab: "ch", name: UI.tabCH, bank: data.ch.meta.bank, rate: num(data.ch.now.base) + "%", sub: lc(data.ch.now) });
+    [["gb", UI.tabGB], ["ca", UI.tabCA], ["aus", UI.tabAUS]].forEach(function (x) {
+      var k = data[x[0]]; if (k) out.push({ tab: x[0], name: x[1], bank: k.meta.bank, rate: num(k.now.base) + "%", sub: lc(k.now) });
+    });
     if (data.hk) out.push({ tab: "hk", name: UI.tabHK, bank: { ko: "홍콩금융관리국", en: "HK Monetary Authority" }, rate: num(data.hk.now.base) + "%", sub: lc(data.hk.now) });
     if (data.sg) {
       var L = data.sg.now.last;
@@ -990,7 +1074,7 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "setalert" ? (extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }) : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       var proTab = ["proall", "pro", "assets", "fxpro"].indexOf(view.tab) >= 0;  // PRO 메뉴 버튼을 보여 줄 화면
@@ -1017,7 +1101,7 @@
         (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
         '<div class="mn-group"><div class="mn-h">' + t({ ko: "설정", en: "Settings" }) + "</div>" +
           item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
-          (alertsAvail() ? item("setalert", extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }, "", false, { ko: "금리 결정·지표 발표·주간 요약 알림 켜기·끄기", en: "Turn alerts for decisions, releases and weekly summary on/off" }) : "") + 
+          (alertsAvail() ? item("setalert", { ko: "알림", en: "Notifications" }, "", false, { ko: "휴대폰 알림·받을 항목·주간 이메일", en: "Phone alerts, what to receive, weekly email" }) : "") + 
           '<button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
           '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", ja: "言語", es: "Idioma", fr: "Langue", de: "Sprache", nl: "Taal" }) + "</span></span>" +
           '<span class="mn-r"><b class="mn-curlang">' + LANGS.map(function (l) { return '<span class="' + l + '">' + LANG_NAME[l] + "</span>"; }).join("") + '</b><span class="mn-chev mn-caret" aria-hidden="true">›</span></span></button>' +
@@ -1604,7 +1688,7 @@
         eyebrow: { ko: "한국", en: "Korea" }, title: { ko: "한미 기준금리", en: "Korea vs. US policy rates" } };
       return null;
     }
-    var cm = /^(ea|ch|jp|cn)-(taylor|us)$/.exec(key);
+    var cm = /^(ea|ch|jp|cn|gb|ca|aus)-(taylor|us)$/.exec(key);
     if (cm && data && data[cm[1]]) {
       var q = data[cm[1]], me = q.meta;
       if (cm[2] === "taylor") return { f: { key: key, name: { ko: "테일러 준칙 (" + me.country.ko + ")", en: "Taylor rule (" + me.country.en + ")" }, series: q.series.taylor },
@@ -1638,7 +1722,7 @@
   }
   function openIndZoom(key) {
     var r = null;
-    var pm = /^(kr|hk|sg|ea|ch|jp|cn):/.exec(key), src = pm && data ? data[pm[1] === "kr" ? "korea" : pm[1]] : null;
+    var pm = /^(kr|hk|sg|ea|ch|jp|cn|gb|ca|aus):/.exec(key), src = pm && data ? data[pm[1] === "kr" ? "korea" : pm[1]] : null;
     if (pm) {
       (src ? src.tiles : []).forEach(function (x) { if (pm[1] + ":" + x.key === key) r = x; });
     } else {
@@ -1915,6 +1999,12 @@
           en: "The SNB treats 0–2% inflation as price stability. Because the franc is a safe haven that strengthens in every crisis, it often intervenes in currency markets alongside rate moves. The policy rate was −0.75% from 2015 to 2022." },
     jp: { ko: "일본은행은 2013년부터 2% 물가목표를 두고, 2016~2024년에는 마이너스 금리와 수익률곡선 통제(10년 국채 금리를 0% 근처로 묶음)를 썼습니다. 2024년에 마이너스 금리를 끝내고 금리를 올리기 시작했습니다. 2001~2006년 양적완화 시기는 정책금리 대신 실제 콜금리로 채웠습니다.",
           en: "The BOJ adopted a 2% target in 2013 and used negative rates and yield-curve control (pinning 10-yr JGBs near 0%) from 2016 to 2024, when it ended negative rates and began hiking. The 2001–2006 quantitative-easing gap is filled with the actual call rate." },
+    gb: { ko: "영란은행은 2% 물가목표를 두고 1년에 8번 통화정책위원회(MPC, 9명 투표)에서 기준금리(Bank Rate)를 정합니다. 2009~2021년에는 0.1~0.75%의 초저금리를 유지하다가 2021년 말부터 빠르게 올렸습니다.",
+          en: "The Bank of England targets 2% inflation and sets Bank Rate eight times a year by a vote of its nine-member Monetary Policy Committee. Rates sat at 0.1–0.75% from 2009 to 2021 before rising fast from late 2021." },
+    ca: { ko: "캐나다 중앙은행은 1~3% 범위의 가운데인 2%를 물가목표로 두고 1년에 8번 기준금리(익일물 목표금리)를 발표합니다. 미국 경제와 밀접하고 원유 수출국이라 유가와 캐나다달러 환율의 영향을 많이 받습니다. 근원물가는 캐나다은행이 중시하는 절사평균(CPI-trim)을 씁니다.",
+          en: "The Bank of Canada targets 2%, the middle of a 1–3% range, and announces its overnight rate target eight times a year. Close ties to the US and oil exports make oil prices and the Canadian dollar important. Core inflation here is the trimmed mean (CPI-trim) the Bank watches." },
+    aus: { ko: "호주 중앙은행은 2~3% 물가목표(가운데 2.5%)를 두고 1년에 8번 통화정책위원회(2025년 신설)에서 캐시레이트를 정합니다. 호주의 공식 근원물가(절사평균)는 자동으로 받을 수 있는 공개 출처가 없어, 이 탭은 분기마다 나오는 소비자물가로 적정금리를 계산합니다.",
+           en: "The RBA targets 2–3% inflation (midpoint 2.5%) and its Monetary Policy Board sets the cash rate eight times a year. There is no open feed for Australia's official trimmed-mean core inflation that we can read automatically, so this tab uses quarterly headline CPI for the fair rate." },
     cn: { ko: "인민은행은 물가안정목표제를 쓰지 않고, 성장 목표·고용·금융안정·환율을 함께 봅니다. 기준이 되는 금리는 1년 대출우대금리(LPR)이며, 7일 역레포 금리·지급준비율·정책 대출(MLF) 등 여러 수단을 같이 씁니다. 그래서 이 탭은 판단 없이 금리와 지표만 보여 줍니다.",
           en: "The PBoC doesn't run inflation targeting; it weighs growth targets, jobs, financial stability and the currency. The benchmark shown is the 1-year Loan Prime Rate, used alongside the 7-day reverse repo, reserve requirements and policy loans (MLF). So this tab shows rates and indicators without a call." },
   };
@@ -2636,7 +2726,7 @@
         pro.folders.map(function (f) { return '<div class="pg">' + folderDetail(f) + "</div>"; }).join("");
     } else if (view.tab === "korea" && data.korea) {
       body = koreaView(data.korea);
-    } else if (["ea", "ch", "jp", "cn"].indexOf(view.tab) >= 0 && data[view.tab]) {
+    } else if (["ea", "ch", "jp", "cn", "gb", "ca", "aus"].indexOf(view.tab) >= 0 && data[view.tab]) {
       body = cbView(data[view.tab]);
     } else if (view.tab === "hk" && data.hk) {
       body = hkView(data.hk);
@@ -2660,7 +2750,7 @@
     } else if (view.tab === "sethome") {
       body = homeEditView();
     } else if (view.tab === "setalert") {
-      body = alertBox() || '<section class="card"><p class="sub">' + t({ ko: "이 화면에서는 알림을 켤 수 없습니다. 휴대폰 홈 화면에 설치한 앱에서 켜 주세요.", en: "Notifications can't be turned on here. Use the app installed on your phone's home screen." }) + "</p></section>";
+      body = notifView();
     } else if (view.tab === "admin") {
       body = adminView();
     } else if (view.tab === "calc" && data.fx) {
@@ -2784,7 +2874,7 @@
     });
   }
   // ---------- 관리자 화면 (supabase/admin.sql) ----------
-  var admin = { rows: null, q: "", busy: false, msg: null };
+  var admin = { rows: null, q: "", busy: false, msg: null, stats: null };
   function adminRpc(name, body) {
     return freshToken().then(function (tok) {
       if (!tok) throw new Error("signed out");
@@ -2795,6 +2885,8 @@
   }
   function adminLoad() {
     admin.busy = true; admin.msg = null; render();
+    adminRpc("admin_stats", {}).then(function (st) { admin.stats = st || null; render(); },
+      function () { admin.stats = false; render(); });  // supabase/prefs.sql 을 아직 안 돌렸으면 통계 칸에 안내
     adminRpc("admin_list_members", { q: admin.q || null }).then(function (rows) { admin.rows = rows || []; admin.busy = false; render(); },
       function () { admin.busy = false; admin.msg = { ko: "회원 목록을 불러오지 못했습니다. 관리자 설정(SQL)을 했는지 확인하세요.", en: "Couldn't load members. Check that the admin SQL setup was run." }; render(); });
   }
@@ -2812,7 +2904,7 @@
             '<button type="button" class="tgl" aria-pressed="true" data-admin-on="' + esc(u.user_id) + '">' + t({ ko: "PRO 켜기", en: "Turn on PRO" }) + "</button>") + "</div></li>";
     }).join("");
     var pros = (admin.rows || []).filter(function (u) { return u.is_pro; }).length;
-    return '<section class="card"><h2>' + t({ ko: "회원 관리", en: "Members" }) + "</h2>" +
+    return adminStatsView() + '<section class="card"><h2>' + t({ ko: "회원 관리", en: "Members" }) + "</h2>" +
       '<p class="sub">' + t({ ko: "이메일 일부로 검색하고, PRO를 켜거나 끕니다. 켤 때 날짜를 고르면 그날까지만 PRO가 열리고, 비워 두면 기한이 없습니다.", en: "Search by part of an email and turn PRO on or off. Pick a date to make PRO expire then; leave it blank for no end date." }) + "</p>" +
       '<form class="ad-search" data-adminform><input type="search" name="q" value="' + esc(admin.q) + '" placeholder="' + esc(tt({ ko: "이메일 검색", en: "Search email" })) + '">' +
       '<button type="submit" class="refresh">' + t({ ko: "검색", en: "Search" }) + "</button></form>" +
@@ -2820,6 +2912,25 @@
       (admin.msg ? '<p class="note warn">' + t(admin.msg) + "</p>" : "") +
       (admin.rows ? '<p class="note">' + t({ ko: admin.rows.length + "명 (PRO " + pros + "명)" + (admin.rows.length >= 200 ? " · 최근 200명까지 표시" : ""), en: admin.rows.length + " members (" + pros + " PRO)" + (admin.rows.length >= 200 ? " · showing the latest 200" : "") }) + "</p>" : "") +
       '<ul class="ad-list">' + rows + "</ul></section>";
+  }
+  function adminStatsView() {
+    var st = admin.stats;
+    var head = '<section class="card"><h2>' + t({ ko: "한눈에 보기", en: "At a glance" }) + "</h2>";
+    if (st === false) return head + '<p class="note">' + t({ ko: "통계를 보려면 Supabase에서 supabase/prefs.sql 을 한 번 실행하세요.", en: "Run supabase/prefs.sql in Supabase once to see statistics." }) + "</p></section>";
+    if (!st) return head + '<p class="note">' + t({ ko: "불러오는 중…", en: "Loading…" }) + "</p></section>";
+    var box = function (label, v, sub) { return statBox(label, String(v == null ? "–" : v), sub || ""); };
+    var sg = st.signups || [], mx = Math.max.apply(null, sg.map(function (x) { return x.n; }).concat([1]));
+    var bars = sg.map(function (x) {
+      return '<li class="ad-bar"><span class="ad-bar-l">' + esc(x.week.slice(5).replace("-", "/")) + '</span><span class="ad-bar-t"><i style="width:' + Math.round(x.n / mx * 100) + '%"></i></span><b>' + x.n + "</b></li>";
+    }).join("");
+    var langs = (st.langs || []).map(function (x) { return esc(LANG_NAME[x.lang] || x.lang) + " " + x.n; }).join(" · ");
+    return head + '<div class="now-row">' +
+      box({ ko: "전체 회원", en: "Members" }, st.members, t({ ko: "PRO " + st.pro + "명", en: st.pro + " PRO" })) +
+      box({ ko: "최근 7일 로그인", en: "Signed in, last 7 days" }, st.active_7d, t({ ko: "30일 " + st.active_30d + "명", en: "30 days: " + st.active_30d })) +
+      box({ ko: "알림 켠 기기", en: "Devices with alerts" }, st.push_devices, t({ ko: st.push_users + "명", en: st.push_users + " people" })) +
+      box({ ko: "주간 이메일 구독", en: "Weekly email subscribers" }, st.weekly_email) + "</div>" +
+      (bars ? '<h3 class="ad-h3">' + t({ ko: "주별 신규 가입 (최근 12주)", en: "New sign-ups per week (last 12 weeks)" }) + '</h3><ul class="ad-bars">' + bars + "</ul>" : "") +
+      (langs ? '<p class="note">' + t({ ko: "알림 언어: ", en: "Alert languages: " }) + langs + "</p>" : "") + "</section>";
   }
   function adminSet(uid, on, until) {
     admin.busy = true; render();
@@ -3046,7 +3157,7 @@
     setLang(x.value);
     try { localStorage.setItem(STORE, x.value); } catch (err) {}
     extSet({ lang: x.value });
-    pushSync();
+    pushSync(); mailSync();
   });
   app.addEventListener("click", function (e) {
     var b = e.target.closest("[data-lang]");
@@ -3055,7 +3166,7 @@
       try { localStorage.setItem(STORE, b.dataset.lang); } catch (err) {}
       if (b.classList.contains("mn-lang")) openMenu(false);
       extSet({ lang: b.dataset.lang });
-      pushSync();
+      pushSync(); mailSync();
       if (view.tab === "calc") { view.calc = null; render(); }  // 금액 단위(만원/$)가 언어를 따라간다
       if ((!view.fxBase && view.tab === "all" && data && data.fx) || (view.tab === "all" && extOn())) render();  // 환율 기본 기준(한국어=원, 영어=달러)이 언어를 따라가도록
       return;
@@ -3064,7 +3175,7 @@
     var ab0 = e.target.closest("[data-auth]");
     if (ab0) {
       var act = ab0.dataset.auth;
-      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.admin = false; admin.rows = null; if (view.tab === "admin") view.tab = "all"; auth.nodata = false; auth.step = "signin"; render(); }
+      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.admin = false; admin.rows = null; mail.on = null; mail.msg = null; if (view.tab === "admin") view.tab = "all"; auth.nodata = false; auth.step = "signin"; render(); }
       else if (act === "tosignup") { auth.step = "signup"; auth.msg = null; render(); }
       else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
       else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }
@@ -3073,6 +3184,14 @@
     }
     if (e.target.closest("[data-share]")) { shareSheet(); return; }
     if (e.target.closest("[data-push]")) { pushToggle(); return; }
+    if (e.target.closest("[data-mail]")) { mailToggle(); return; }
+    var nkb = e.target.closest("[data-nk]");
+    if (nkb) {
+      var nc = notifCfg(), ni = nc.kinds.indexOf(nkb.dataset.nk);
+      if (ni >= 0) nc.kinds.splice(ni, 1); else nc.kinds.push(nkb.dataset.nk);
+      notifSet(nc); render(); return;
+    }
+    if (e.target.closest("[data-nq]")) { var qc = notifCfg(); qc.quiet = !qc.quiet; notifSet(qc); render(); return; }
     var aon = e.target.closest("[data-admin-on]");
     if (aon) { var ui = app.querySelector('[data-admin-until="' + aon.dataset.adminOn + '"]'); adminSet(aon.dataset.adminOn, true, ui && ui.value); return; }
     var aoff = e.target.closest("[data-admin-off]");
