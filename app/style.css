@@ -725,9 +725,7 @@ header .hdr-right { flex: none; margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { .splash .spin { animation: none; } }
 .mn-logout .mn-nm { color: var(--ink-2); }
 
-/* 좌우로 밀어서 넘길 때 살짝 들어오는 움직임 */
-.slide-l > :not(header):not(.mbar) { animation: slide-l .22s ease-out; }
-.slide-r > :not(header):not(.mbar) { animation: slide-r .22s ease-out; }
-@keyframes slide-l { from { opacity: .3; transform: translateX(28px); } to { opacity: 1; transform: none; } }
-@keyframes slide-r { from { opacity: .3; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .slide-l > *, .slide-r > * { animation: none !important; } }
+/* 좌우로 밀어서 넘기기: 손가락을 따라 움직이는 본문 영역 */
+.pg-body { touch-action: pan-y; }
+.wrap { overflow-x: clip; }
+@media (prefers-reduced-motion: reduce) { .pg-body { transition: none !important; } }

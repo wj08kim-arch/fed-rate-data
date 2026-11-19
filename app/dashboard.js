@@ -2484,7 +2484,7 @@
     } else {
       body = overview();
     }
-    app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + body + "</div>";
+    app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + '<div class="pg-body">' + body + "</div></div>";
     setLang(root.lang);
     initCharts(app);
     mountPx(app);
@@ -2708,29 +2708,65 @@
     if (view.tab === "calc") return ["all", "calc"];
     return null;
   }
-  var sw = null;
+  // 손가락을 따라 화면이 움직이고, 충분히 밀면 옆 화면이 들어온다 (덜 밀면 제자리로)
+  var sw = null, swBusy = false;
+  function swNeighbor(dir) {
+    var seq = swipeSeq();
+    if (!seq) return null;
+    var i = seq.indexOf(view.tab), j = i + dir;
+    return i < 0 || j < 0 || j >= seq.length ? null : seq[j];
+  }
+  function swPane() { return app.querySelector(".pg-body"); }
   app.addEventListener("touchstart", function (e) {
     sw = null;
-    if (e.touches.length !== 1 || menuOpen || zoomState || !data) return;
-    // 그래프·슬라이더·옆으로 넘기는 표·입력칸 위에서 시작한 밀기는 그쪽 동작이 우선
-    if (e.target.closest(".chart, svg, input, select, textarea, .tbl, .tabs, .fxcards, .seg-btn, .mbar-gos, .mn-sheet")) return;
+    if (swBusy || e.touches.length !== 1 || menuOpen || zoomState || !data || !swPane()) return;
+    if (e.target.closest(".chart, svg, input, select, textarea, .tbl, .tabs, .fxcards, .seg-btn, .mbar-gos, .mn-sheet, header, .mbar")) return;
     var tch = e.touches[0];
-    sw = { x: tch.clientX, y: tch.clientY, t: Date.now() };
+    sw = { x: tch.clientX, y: tch.clientY, t: Date.now(), lock: null, dx: 0, lastX: tch.clientX, lastT: Date.now(), v: 0 };
   }, { passive: true });
-  app.addEventListener("touchend", function (e) {
+  app.addEventListener("touchmove", function (e) {
     if (!sw) return;
-    var tch = e.changedTouches[0], dx = tch.clientX - sw.x, dy = tch.clientY - sw.y, dt = Date.now() - sw.t;
-    sw = null;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 800) return;
-    var seq = swipeSeq();
-    if (!seq) return;
-    var i = seq.indexOf(view.tab), j = i + (dx < 0 ? 1 : -1);
-    if (i < 0 || j < 0 || j >= seq.length) return;
-    view.tab = seq[j]; view.folder = null;
-    render(); scrollTo(0, 0);
-    var w = app.querySelector(".wrap");
-    if (w) { w.classList.remove("slide-l", "slide-r"); void w.offsetWidth; w.classList.add(dx < 0 ? "slide-l" : "slide-r"); }
+    var tch = e.touches[0], dx = tch.clientX - sw.x, dy = tch.clientY - sw.y;
+    if (!sw.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      sw.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+      if (sw.lock === "y") { sw = null; return; }
+      sw.next = swNeighbor(dx < 0 ? 1 : -1);
+    }
+    var now = Date.now();
+    sw.v = (tch.clientX - sw.lastX) / Math.max(now - sw.lastT, 1);
+    sw.lastX = tch.clientX; sw.lastT = now;
+    var dir = dx < 0 ? 1 : -1;
+    if (swNeighbor(dir) !== sw.next) sw.next = swNeighbor(dir);
+    sw.dx = sw.next ? dx : dx * 0.25;  // 끝 화면에서는 고무줄처럼 조금만
+    var pane = swPane();
+    if (pane) { pane.style.transition = "none"; pane.style.transform = "translate3d(" + sw.dx + "px,0,0)"; pane.style.opacity = String(1 - Math.min(Math.abs(sw.dx) / innerWidth, 1) * 0.35); }
   }, { passive: true });
+  function swEnd() {
+    if (!sw || sw.lock !== "x") { sw = null; return; }
+    var s0 = sw; sw = null;
+    var pane = swPane(), w = innerWidth, dir = s0.dx < 0 ? 1 : -1, next = swNeighbor(dir);
+    var go = next && (Math.abs(s0.dx) > w * 0.25 || (Math.abs(s0.v) > 0.45 && Math.abs(s0.dx) > 30 && (s0.v < 0) === (dir > 0)));
+    if (!pane) return;
+    pane.style.transition = "transform .18s ease-out, opacity .18s ease-out";
+    if (!go) { pane.style.transform = ""; pane.style.opacity = ""; return; }
+    swBusy = true;
+    pane.style.transform = "translate3d(" + (-dir * w) + "px,0,0)"; pane.style.opacity = "0";
+    setTimeout(function () {
+      view.tab = next; view.folder = null;
+      render(); scrollTo(0, 0);
+      var p2 = swPane();
+      if (p2) {
+        p2.style.transition = "none"; p2.style.transform = "translate3d(" + (dir * w * 0.35) + "px,0,0)"; p2.style.opacity = "0";
+        void p2.offsetWidth;
+        p2.style.transition = "transform .24s cubic-bezier(.2,.8,.2,1), opacity .24s ease-out";
+        p2.style.transform = ""; p2.style.opacity = "";
+      }
+      setTimeout(function () { swBusy = false; }, 260);
+    }, 170);
+  }
+  app.addEventListener("touchend", swEnd, { passive: true });
+  app.addEventListener("touchcancel", function () { if (sw && sw.lock === "x") { sw.dx = 0; swEnd(); } else sw = null; }, { passive: true });
 
   app.addEventListener("click", function (e) {
     var b = e.target.closest("[data-lang]");
