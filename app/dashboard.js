@@ -146,12 +146,12 @@
   }
   /** 두 언어 텍스트. CSS가 현재 언어만 보여 준다 (언어 전환 시 다시 그릴 필요 없음). */
   // ---------- 언어: 한국어·영어는 문구에 직접, 중국어·스페인어는 영어 원문으로 사전(i18n.js)을 찾는다 ----------
-  var LANGS = ["ko", "en", "zh", "es"];
-  var LANG_NAME = { ko: "한국어", en: "English", zh: "中文", es: "Español" };
-  function langsw() {  // 메뉴가 없는 화면(로그인·불러오는 중)에서 쓰는 언어 버튼
-    return '<div class="langsw" role="group" aria-label="Language">' + LANGS.map(function (l) {
-      return '<button type="button" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '">' + { ko: "한국어", en: "EN", zh: "中文", es: "ES" }[l] + "</button>";
-    }).join("") + "</div>";
+  var LANGS = ["ko", "en", "zh", "ja", "es", "fr", "de", "nl"];
+  var LANG_NAME = { ko: "한국어", en: "English", zh: "中文", ja: "日本語", es: "Español", fr: "Français", de: "Deutsch (German)", nl: "Nederlands (Dutch)" };
+  function langsw() {  // 메뉴가 없는 화면(로그인·불러오는 중)에서 쓰는 언어 고르기 (8개 언어라 펼침 목록)
+    return '<label class="langsel"><span class="langsel-ic" aria-hidden="true">🌐</span><select data-langsel aria-label="Language">' + LANGS.map(function (l) {
+      return '<option value="' + l + '"' + (root.lang === l ? " selected" : "") + ">" + LANG_NAME[l] + "</option>";
+    }).join("") + "</select></label>";
   }
   // 사전에 {이름} 자리표시자가 있는 문구는 '문장 틀'로도 쓴다: 숫자가 들어간 서버 문장("Fair rate 3.80% vs 3.00% now")을
   // 틀("Fair rate {a} vs {b} now")에 맞춰 번역하고, 끼워 넣은 값도 다시 번역한다.
@@ -198,7 +198,7 @@
     }).join("");
   }
   function tipAttr(ko, en) {
-    return ' data-tip-ko="' + esc(ko) + '" data-tip-en="' + esc(en) + '" data-tip-zh="' + esc(trx("zh", en)) + '" data-tip-es="' + esc(trx("es", en)) + '"';
+    return ' data-tip-ko="' + esc(ko) + '" data-tip-en="' + esc(en) + '"' + LANGS.slice(2).map(function (l) { return " data-tip-" + l + '="' + esc(trx(l, en)) + '"'; }).join("");
   }
   function pct(p) { return Math.round(p * 100) + "%"; }
   function honestNote(p) {
@@ -1019,7 +1019,7 @@
           item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
           (alertsAvail() ? item("setalert", extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }, "", false, { ko: "금리 결정·지표 발표·주간 요약 알림 켜기·끄기", en: "Turn alerts for decisions, releases and weekly summary on/off" }) : "") + 
           '<button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
-          '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", es: "Idioma" }) + "</span></span>" +
+          '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", ja: "言語", es: "Idioma", fr: "Langue", de: "Sprache", nl: "Taal" }) + "</span></span>" +
           '<span class="mn-r"><b class="mn-curlang">' + LANGS.map(function (l) { return '<span class="' + l + '">' + LANG_NAME[l] + "</span>"; }).join("") + '</b><span class="mn-chev mn-caret" aria-hidden="true">›</span></span></button>' +
           '<div class="mn-langlist" id="mn-langlist" hidden>' +
         LANGS.map(function (l) {
@@ -2711,6 +2711,7 @@
     document.querySelectorAll("[data-lang]").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.lang === l));
     });
+    document.querySelectorAll("[data-langsel]").forEach(function (x) { x.value = l; });
     document.querySelectorAll("[data-aria]").forEach(function (e) {
       e.setAttribute("aria-label", e.getAttribute("data-tip-" + l));
     });
@@ -3039,6 +3040,14 @@
   app.addEventListener("touchend", swEnd, { passive: true });
   app.addEventListener("touchcancel", function () { if (sw && sw.lock === "x") { sw.dx = 0; swEnd(); } else sw = null; }, { passive: true });
 
+  app.addEventListener("change", function (e) {
+    var x = e.target.closest && e.target.closest("[data-langsel]");
+    if (!x) return;
+    setLang(x.value);
+    try { localStorage.setItem(STORE, x.value); } catch (err) {}
+    extSet({ lang: x.value });
+    pushSync();
+  });
   app.addEventListener("click", function (e) {
     var b = e.target.closest("[data-lang]");
     if (b) {
