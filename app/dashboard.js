@@ -2679,6 +2679,43 @@
   }
   app.addEventListener("input", onCalcInput);
   app.addEventListener("change", onCalcInput);
+  // ---------- 좌우로 밀어서 화면 넘기기 ----------
+  // 같은 묶음 안에서 이동: 세 '전체' 화면 · 나라별 금리(미국 연준·각국, 메뉴 순서) · PRO(전체·경제학자·자산·환율) · 홈(전체·계산기)
+  function swipeSeq() {
+    var cl = countryList(), pn = pins(), proOn = pro || serverOn() || proLocked();
+    var ctry = ["overview"].concat(cl.slice().sort(function (a, b) { return (pn.indexOf(a.tab) < 0) - (pn.indexOf(b.tab) < 0); }).map(function (x) { return x.tab; }));
+    var tops = ["all", "countries"].concat(proOn ? ["proall"] : []);
+    var pros = proOn ? ["proall", "pro", "assets", "fxpro"] : [];
+    if (tops.indexOf(view.tab) >= 0) return tops;
+    if (ctry.indexOf(view.tab) >= 0) return ctry;
+    if (pros.indexOf(view.tab) >= 0) return pros;
+    if (view.tab === "calc") return ["all", "calc"];
+    return null;
+  }
+  var sw = null;
+  app.addEventListener("touchstart", function (e) {
+    sw = null;
+    if (e.touches.length !== 1 || menuOpen || zoomState || !data) return;
+    // 그래프·슬라이더·옆으로 넘기는 표·입력칸 위에서 시작한 밀기는 그쪽 동작이 우선
+    if (e.target.closest(".chart, svg, input, select, textarea, .tbl, .tabs, .fxcards, .seg-btn, .mbar-gos, .mn-sheet")) return;
+    var tch = e.touches[0];
+    sw = { x: tch.clientX, y: tch.clientY, t: Date.now() };
+  }, { passive: true });
+  app.addEventListener("touchend", function (e) {
+    if (!sw) return;
+    var tch = e.changedTouches[0], dx = tch.clientX - sw.x, dy = tch.clientY - sw.y, dt = Date.now() - sw.t;
+    sw = null;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 800) return;
+    var seq = swipeSeq();
+    if (!seq) return;
+    var i = seq.indexOf(view.tab), j = i + (dx < 0 ? 1 : -1);
+    if (i < 0 || j < 0 || j >= seq.length) return;
+    view.tab = seq[j]; view.folder = null;
+    render(); scrollTo(0, 0);
+    var w = app.querySelector(".wrap");
+    if (w) { w.classList.remove("slide-l", "slide-r"); void w.offsetWidth; w.classList.add(dx < 0 ? "slide-l" : "slide-r"); }
+  }, { passive: true });
+
   app.addEventListener("click", function (e) {
     var b = e.target.closest("[data-lang]");
     if (b) {
