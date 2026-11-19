@@ -72,7 +72,7 @@
     dataOnly: { ko: "경제 데이터만 보면", en: "Economic data alone" },
     trust: { ko: "이 숫자는 얼마나 믿을 만한가요?", en: "How reliable is this?" },
     keyInds: { ko: "핵심 지표", en: "Key indicators" },
-    keyIndsSub: { ko: "금리 결정에 가장 직접적인 6개입니다. 3개월 전과 비교했습니다.", en: "The six that matter most for rate decisions, versus three months ago." },
+    keyIndsSub: { ko: "금리 결정에 가장 직접적인 6개입니다. 한 달 전과 비교했습니다.", en: "The six that matter most for rate decisions, versus a month earlier." },
     vs3m: { ko: "3개월 {v}", en: "3m {v}" },
     commMore: { ko: "전체 {n}건 보기", en: "Show all {n}" },
     allInds: { ko: "전체 지표 ({n}개)", en: "All indicators ({n})" },
@@ -277,6 +277,23 @@
     y2_spread: { ko: "2년물 − 기준금리", en: "2-yr yield − policy rate" },
     y10: { ko: "국채 10년", en: "10-yr Treasury" },
   };
+  // 핵심 지표 카드의 변화: 최근 그래프 자료(hist)의 마지막 두 점 → 1개월 변화 (분기 자료면 그 간격만큼)
+  function recentChg(r) {
+    var h = r.hist;
+    if (h && h.length > 1) {
+      var a = h[h.length - 1], b = h[h.length - 2];
+      if (a[1] != null && b[1] != null) {
+        var pa = String(a[0]).split("-"), pb = String(b[0]).split("-");
+        var m = (+pa[0] - +pb[0]) * 12 + (+pa[1] - +pb[1]);
+        return { v: a[1] - b[1], m: m > 0 ? m : 1 };
+      }
+    }
+    return r.chg3 == null ? null : { v: r.chg3, m: 3 };
+  }
+  function chgLabel(c, cv, won) {
+    if (c.m === 1) return t(won ? { ko: "1개월 {v}원", en: "1m {v}" } : { ko: "1개월 {v}", en: "1m {v}" }, { v: cv });
+    return t(won ? { ko: "{m}개월 {v}원", en: "{m}m {v}" } : { ko: "{m}개월 {v}", en: "{m}m {v}" }, { v: cv, m: c.m });
+  }
   function keyTiles(d) {
     var rows = {};
     d.groups.forEach(function (g) { g.rows.forEach(function (r) { rows[r.key] = r; }); });
@@ -285,7 +302,7 @@
     var tiles = keys.map(function (k) {
       var r = rows[k];
       if (!r) return "";
-      var ch = r.chg3 == null ? "" : '<span class="tile-ch">' + t(UI.vs3m, { v: num(r.chg3, 2, true) }) + "</span>";
+      var c1 = recentChg(r), ch = c1 == null ? "" : '<span class="tile-ch">' + chgLabel(c1, num(c1.v, 2, true)) + "</span>";
       var open = r.hist && r.hist.length > 1;
       return (open ? '<button type="button" class="tile tap" data-ind="' + esc(k) + '">' : '<div class="tile">') +
         '<div class="tile-name">' + t(SHORT[k] || r.name) + (open ? '<svg class="tile-go" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12 7 7l3 3 4-6"/></svg>' : "") + "</div>" +
@@ -1652,8 +1669,7 @@
   function tileGrid(list, prefix) {
     return list.map(function (r) {
       var d = r.digits != null ? r.digits : FX_DIGITS[r.key] != null ? FX_DIGITS[r.key] : 2, won = r.key === "usdkrw";
-      var cv = num(r.chg3, d, true);
-      var ch = r.chg3 == null ? "" : '<span class="tile-ch">' + t(won ? { ko: "3개월 " + cv + "원", en: "3m " + cv } : UI.vs3m, { v: cv }) + "</span>";
+      var c1 = recentChg(r), ch = c1 == null ? "" : '<span class="tile-ch">' + chgLabel(c1, num(c1.v, d, true), won) + "</span>";
       return '<button type="button" class="tile tap" data-ind="' + prefix + ":" + esc(r.key) + '">' +
         '<div class="tile-name">' + t(r.name) + '<svg class="tile-go" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12 7 7l3 3 4-6"/></svg></div>' +
         '<div class="tile-val">' + num(r.value, d) + '<span class="u">' + t(r.unit) + "</span></div>" +
@@ -1694,8 +1710,8 @@
       (n.taylor == null ? "" : statBox({ ko: "테일러 준칙 적정금리", en: "Taylor-rule rate" }, num(n.taylor) + "%", t({ ko: n.taylor_asof + " 기준 · " + sigTxt.ko, en: "As of " + n.taylor_asof + " · " + sigTxt.en }))) +
       "</div>" + cbAbout(k) + "</section>" +
       '<section class="card"><h2>' + t(UI.keyInds) + '</h2><p class="sub">' +
-      t({ ko: me.short.ko + " 금리 결정에 직접적인 지표입니다. 3개월 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
-          en: "Indicators that matter most for " + me.short.en + ", versus three months ago. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tileGrid(k.tiles, cc) + "</div></section>" +
+      t({ ko: me.short.ko + " 금리 결정에 직접적인 지표입니다. 한 달 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
+          en: "Indicators that matter most for " + me.short.en + ", versus a month earlier. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tileGrid(k.tiles, cc) + "</div></section>" +
       (k.areas && k.areas.length ? '<section class="card"><h2>' + t(UI.drivers) + '</h2><p class="sub">' +
         t({ ko: "각 영역이 평소(2010~2019년)보다 얼마나 벗어났는지입니다. 가운데 선이 평소 수준입니다.",
             en: "How far each area sits from normal (2010–2019). The center line is normal." }) + "</p>" + areaChart(k.areas) + "</section>" : "") +
@@ -2207,8 +2223,8 @@
         en: "Source: MAS past monetary policy decisions. Tighten = faster appreciation or band re-centred up; ease = slower or 0% appreciation, re-centred down, or a wider band." }) +
       ' <a href="' + esc(g.decisions_url) + '" target="_blank" rel="noopener">mas.gov.sg</a></p></section>' +
       '<section class="card"><h2>' + t(UI.keyInds) + '</h2><p class="sub">' +
-      t({ ko: "MAS 결정에 직접적인 지표입니다. 3개월 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
-          en: "Indicators that matter most for MAS, versus three months ago. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tileGrid(g.tiles, "sg") + "</div></section>" +
+      t({ ko: "MAS 결정에 직접적인 지표입니다. 한 달 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
+          en: "Indicators that matter most for MAS, versus a month earlier. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tileGrid(g.tiles, "sg") + "</div></section>" +
       (g.areas && g.areas.length ? '<section class="card"><h2>' + t({ ko: "무엇이 MAS 결정을 움직이나", en: "What drives MAS decisions" }) + '</h2><p class="sub">' +
         t({ ko: "각 영역이 평소(2010~2019년)보다 얼마나 벗어났는지입니다. 긴축 압력 = 싱가포르달러를 더 빨리 절상할(조일) 쪽입니다.",
             en: "How far each area sits from normal (2010–2019). Tightening pressure = toward faster appreciation of the Singapore dollar." }) + "</p>" + areaChart(g.areas, true) + "</section>" : "") +
@@ -2269,8 +2285,8 @@
         en: "No Bank of Korea ECOS key yet, so the call rate stands in for the base rate and inflation and the Taylor rule are left out." }) + "</p>" : "") +
       koreaAbout(k) + "</section>" +
       '<section class="card"><h2>' + t(UI.keyInds) + '</h2><p class="sub">' +
-      t({ ko: "한국은행 금리 결정에 직접적인 지표입니다. 3개월 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
-          en: "Indicators that matter most for the Bank of Korea, versus three months ago. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tiles + "</div></section>" +
+      t({ ko: "한국은행 금리 결정에 직접적인 지표입니다. 한 달 전과 비교했습니다. 카드를 누르면 최근 12개월 그래프가 열립니다.",
+          en: "Indicators that matter most for the Bank of Korea, versus a month earlier. Tap a card for its 12-month chart." }) + '</p><div class="tiles">' + tiles + "</div></section>" +
       (k.areas && k.areas.length ? '<section class="card"><h2>' + t(UI.drivers) + '</h2><p class="sub">' +
         t({ ko: "각 영역이 평소(2010~2019년)보다 얼마나 벗어났는지입니다. 가운데 선이 평소 수준입니다.",
             en: "How far each area sits from normal (2010–2019). The center line is normal." }) + "</p>" + areaChart(k.areas) + "</section>" : "") +
