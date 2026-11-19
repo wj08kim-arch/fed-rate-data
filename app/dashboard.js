@@ -393,10 +393,81 @@
   function briefSection() {
     var b = data.brief;
     if (!b || !b.lines || !b.lines.length) return "";
-    return '<section class="card brief"><div class="eyebrow">' + t({ ko: "오늘의 3줄 요약", en: "Today in three lines" }) + " · " + esc(b.date) + "</div><ol>" +
+    return '<section class="card brief"><div class="brief-top"><div class="eyebrow">' + t({ ko: "오늘의 3줄 요약", en: "Today in three lines" }) + " · " + esc(b.date) + "</div>" +
+      '<button type="button" class="share-btn" data-share aria-haspopup="dialog">' + SHARE_ICON + t({ ko: "공유", en: "Share" }) + "</button></div><ol>" +
       b.lines.map(function (l) { return "<li>" + t(l) + "</li>"; }).join("") + "</ol>" +
       (b.compared ? "" : '<p class="note">' + t({ ko: "전날 자료가 없어 변화 비교는 빠졌습니다.", en: "No previous day to compare with yet." }) + "</p>") + "</section>";
   }
+  // ---------- 오늘의 요약 공유 (카카오톡·왓츠앱·인스타그램 DM 등) ----------
+  var SHARE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function shareText() {
+    var b = data.brief, l = root.lang;
+    var head = word({ ko: "연준 금리 전망 · 오늘의 3줄 요약", en: "Fed Rate Outlook · Today in three lines" }, l) + " (" + b.date + ")";
+    var lines = b.lines.map(function (x, i) { return (i + 1) + ". " + word(x, l); });
+    return head + "\n" + lines.join("\n") + "\n\n" + RESET_URL;
+  }
+  function shareImage() {  // 인스타그램처럼 이미지가 잘 되는 곳을 위한 카드 이미지 (1080×1350 비율)
+    if (!window.html2canvas) return Promise.reject(new Error("no html2canvas"));
+    var b = data.brief, l = root.lang;
+    var el = document.createElement("div");
+    el.className = "share-card";
+    el.innerHTML = '<div class="sc-top"><img src="' + LOGO + '" alt=""><b>' + esc(word(UI.title, l)) + '</b></div>' +
+      '<div class="sc-ey">' + esc(word({ ko: "오늘의 3줄 요약", en: "Today in three lines" }, l)) + " · " + esc(b.date) + "</div>" +
+      "<ol>" + b.lines.map(function (x) { return "<li>" + esc(word(x, l)) + "</li>"; }).join("") + "</ol>" +
+      '<div class="sc-foot">' + esc(RESET_URL.replace(/^https:\/\//, "")) + "</div>";
+    document.body.appendChild(el);
+    return window.html2canvas(el, { scale: 2, backgroundColor: null, logging: false }).then(function (cv) {
+      el.remove();
+      return new Promise(function (res) { cv.toBlob(function (bl) { res(bl); }, "image/png"); });
+    }, function (e) { el.remove(); throw e; });
+  }
+  function shareSheet() {
+    closeShare();
+    var canShare = !!navigator.share;
+    var d = document.createElement("div");
+    d.className = "share-sheet"; d.id = "share-sheet";
+    d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true");
+    d.innerHTML = '<div class="ss-box"><div class="mn-top"><b>' + t({ ko: "오늘의 요약 공유", en: "Share today's summary" }) + '</b><button type="button" class="mn-x" data-share-x aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
+      '<pre class="ss-prev">' + esc(shareText()) + "</pre>" +
+      '<div class="ss-acts">' +
+      (canShare ? '<button type="button" class="ss-act primary" data-share-go="text">' + t({ ko: "공유하기 (카카오톡·왓츠앱·인스타 등)", en: "Share (KakaoTalk, WhatsApp, Instagram…)" }) + "</button>" : "") +
+      '<button type="button" class="ss-act" data-share-go="image">' + t({ ko: "이미지로 공유 (인스타그램 추천)", en: "Share as image (best for Instagram)" }) + "</button>" +
+      '<a class="ss-act" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(shareText()) + '">' + t({ ko: "왓츠앱으로 보내기", en: "Send via WhatsApp" }) + "</a>" +
+      '<button type="button" class="ss-act" data-share-go="copy">' + t({ ko: "글 복사 (카톡·DM에 붙여넣기)", en: "Copy text (paste into any chat)" }) + "</button>" +
+      '</div><p class="note ss-msg" aria-live="polite"></p></div>';
+    document.body.appendChild(d);
+    setLang(root.lang);
+    document.documentElement.classList.add("mn-open");
+    var f = d.querySelector(".ss-act"); if (f) f.focus();
+  }
+  function closeShare() {
+    var d = document.getElementById("share-sheet");
+    if (d) { d.remove(); document.documentElement.classList.remove("mn-open"); }
+  }
+  function shareMsg(pair) { var m = document.querySelector("#share-sheet .ss-msg"); if (m) { m.innerHTML = t(pair); setLang(root.lang); } }
+  function shareGo(kind) {
+    var txt = shareText();
+    if (kind === "text") {
+      navigator.share({ title: tt(UI.title), text: txt }).then(closeShare, function () {});
+    } else if (kind === "copy") {
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () {
+        shareMsg({ ko: "복사했습니다. 카카오톡·왓츠앱·인스타 DM 창에 붙여넣으세요.", en: "Copied. Paste it into KakaoTalk, WhatsApp or an Instagram DM." });
+      }, function () { shareMsg({ ko: "복사하지 못했습니다. 위 글을 길게 눌러 직접 복사하세요.", en: "Couldn't copy. Long-press the text above to copy it." }); });
+    } else if (kind === "image") {
+      shareMsg({ ko: "이미지를 만드는 중…", en: "Making the image…" });
+      shareImage().then(function (blob) {
+        var name = "fed-rate-outlook_" + data.brief.date + ".png";
+        var file = new File([blob], name, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          return navigator.share({ files: [file], title: tt(UI.title) }).then(closeShare, function () { shareMsg({ ko: "", en: "" }); });
+        }
+        var a = document.createElement("a");  // 공유 창이 없는 컴퓨터에서는 이미지 파일로 저장
+        a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        shareMsg({ ko: "이미지를 저장했습니다. 인스타그램 DM 등에서 사진으로 보내세요.", en: "Image saved. Send it as a photo in an Instagram DM or any chat." });
+      }).catch(function () { shareMsg({ ko: "이미지를 만들지 못했습니다.", en: "Couldn't make the image." }); });
+    }
+  }
+
   // 지표 발표 당일 빠른 업데이트 (meetings.flash)
   var ODL = [{ ko: "인하", en: "Cut" }, { ko: "동결", en: "Hold" }, { ko: "인상", en: "Hike" }];
   function mdS(s) { var d = ymd(s); return (d.getMonth() + 1) + "/" + d.getDate(); }
@@ -517,6 +588,7 @@
     if (i >= 0) p.splice(i, 1); else p.push(tab);
     try { localStorage.setItem(PINS, JSON.stringify(p)); } catch (e) {}
     extSet({ pins: p });
+    pushSync();
   }
   // 크롬 확장 프로그램 안에서만: 알림·배지 설정을 백그라운드와 공유
   function extOn() { return typeof chrome !== "undefined" && chrome.storage && chrome.storage.local && chrome.runtime && chrome.runtime.id; }
@@ -528,8 +600,69 @@
       extSet({ pins: pins() });
     } catch (e) {}
   }
+  // ---------- 휴대폰 푸시 알림 (웹앱 · supabase/push.sql · fed_model/push_send.py) ----------
+  var push = { on: false, busy: false, msg: null, checked: false };
+  function pushSupported() { return pwa.on && serverOn() && window.FED_VAPID_PUBLIC && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+  function b64uBytes(s) {
+    var p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  }
+  function jwtSub(tok) { try { return JSON.parse(atob(tok.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub; } catch (e) { return null; } }
+  function pushCheck() {
+    if (push.checked || !pushSupported()) return;
+    push.checked = true;
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+      .then(function (sub) { push.on = !!sub; if (view.tab === "all" && data) render(); }, function () {});
+  }
+  function pushSave(sub) {
+    return freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      var j = sub.toJSON();
+      return sbFetch("/rest/v1/push_subs", { method: "POST", token: tok, prefer: "resolution=merge-duplicates",
+        body: { endpoint: j.endpoint, user_id: jwtSub(tok), p256dh: j.keys.p256dh, auth: j.keys.auth, lang: root.lang, pins: pins(), updated_at: new Date().toISOString() } })
+        .then(function (r) { if (!r.ok) throw new Error(String(r.status)); });
+    });
+  }
+  function pushSync() {  // 언어·★ 고정이 바뀌면 서버의 알림 설정도 맞춘다
+    if (!push.on || !pushSupported()) return;
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) { if (sub) return pushSave(sub); }).catch(function () {});
+  }
+  function pushToggle() {
+    if (push.busy) return;
+    push.busy = true; push.msg = null; render();
+    var done = function (msg) { push.busy = false; push.msg = msg || null; render(); };
+    navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (sub) {  // 끄기
+          var ep = sub.endpoint;
+          return sub.unsubscribe().then(function () { return freshToken(); }).then(function (tok) {
+            if (tok) return sbFetch("/rest/v1/push_subs?endpoint=eq." + encodeURIComponent(ep), { method: "DELETE", token: tok });
+          }).then(function () { push.on = false; done(); });
+        }
+        return Notification.requestPermission().then(function (perm) {
+          if (perm !== "granted") { done({ ko: "알림 권한이 거부됐습니다. 휴대폰 설정 → 알림에서 이 앱을 허용한 뒤 다시 눌러 주세요.", en: "Notifications are blocked. Allow them for this app in your phone's settings, then try again." }); return; }
+          return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(window.FED_VAPID_PUBLIC) })
+            .then(function (ns) { return pushSave(ns); }).then(function () { push.on = true; done({ ko: "알림을 켰습니다.", en: "Notifications are on." }); });
+        });
+      });
+    }).catch(function () { done({ ko: "알림을 켜지 못했습니다. 잠시 뒤 다시 시도하세요.", en: "Couldn't turn on notifications. Try again shortly." }); });
+  }
+  function phonePushBox() {
+    if (!pwa.on || !serverOn() || !window.FED_VAPID_PUBLIC) return "";
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    var head = '<section class="card alertbox"><div><h2>' + t({ ko: "휴대폰 알림", en: "Phone notifications" }) + '</h2><p class="sub">' +
+      t({ ko: "금리 결정 하루 전(미국 연준과 ★로 고정한 나라), 결정 결과, 연준 전망이 크게 바뀔 때, 미국 물가·고용 지표가 나온 직후, 매주 월요일 주간 요약을 휴대폰 알림으로 보내 드립니다.",
+          en: "Get phone notifications the day before rate decisions (the Fed and starred countries), when results come in, when the Fed outlook shifts a lot, right after US inflation and jobs releases, and a weekly summary on Mondays." }) + "</p>";
+    if (ios && !standalone) return head + '<p class="note">' + t({ ko: "아이폰은 홈 화면에 추가한 앱에서만 알림을 켤 수 있습니다(iOS 16.4 이상). 사파리 공유 버튼 → '홈 화면에 추가' 후 그 아이콘으로 열어 주세요.",
+      en: "On iPhone, notifications work only in the app added to your Home Screen (iOS 16.4+). In Safari tap Share → 'Add to Home Screen', then open it from that icon." }) + "</p></div></section>";
+    if (!pushSupported()) return head + '<p class="note">' + t({ ko: "이 브라우저는 알림을 지원하지 않습니다.", en: "This browser doesn't support notifications." }) + "</p></div></section>";
+    pushCheck();
+    return head + (push.msg ? '<p class="note">' + t(push.msg) + "</p>" : "") + '</div><button type="button" class="tgl" data-push aria-pressed="' + push.on + '"' + (push.busy ? " disabled" : "") + ">" +
+      t(push.busy ? { ko: "…", en: "…" } : push.on ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></section>";
+  }
   function alertBox() {
-    if (!extOn()) return "";
+    if (!extOn()) return phonePushBox();
     return '<section class="card alertbox"><div><h2>' + t({ ko: "알림", en: "Alerts" }) + '</h2><p class="sub">' +
       t({ ko: "금리 결정 하루 전, 결정 결과(우리 전망 적중 여부), 연준 전망이 크게 바뀔 때, 미국 물가·고용 지표가 나온 직후, 그리고 매주 월요일 주간 요약을 알려 드립니다. 툴바 아이콘에는 다음 결정까지 남은 날(D-day)이 표시됩니다. ★로 고정한 나라를 우선으로 봅니다.",
           en: "We notify you the day before each rate decision, when results come in (and whether our call was right), when the Fed outlook shifts a lot, right after US inflation and jobs releases, and with a weekly summary on Mondays. The toolbar icon shows days to the next decision. Starred countries come first." }) +
@@ -575,8 +708,49 @@
         "Latest decision: Singapore (policy via the exchange rate) and China (formulas don't fit) show their most recent actual move instead of a call." }) + "</p></section>" +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
+  // 첫 화면('전체') 카드: 보일지·순서를 사용자가 정한다 (이 기기에 저장)
+  var HOME_KEY = "fed-dash-home";
+  var HOME_CARDS = [
+    ["flash", { ko: "방금 나온 지표", en: "Just released" }, function () { return flashSection(); }],
+    ["brief", { ko: "오늘의 3줄 요약", en: "Today in three lines" }, function () { return briefSection(); }],
+    ["weekly", { ko: "주간 요약", en: "Week in review" }, function () { return weeklySection(); }],
+    ["record", { ko: "우리 전망 vs 실제 결과", en: "Our calls vs. actual decisions" }, function () { return recordSection(); }],
+    ["releases", { ko: "미국 주요 지표 발표", en: "Key US data releases" }, function () { return releaseSection(); }],
+    ["fx", { ko: "주요 통화 환율", en: "Major currencies" }, function () { return fxSection(); }],
+    ["alerts", { ko: "알림", en: "Alerts" }, function () { return alertBox(); }],
+    ["install", { ko: "휴대폰 홈 화면에 설치", en: "Add to your home screen" }, function () { return installBox(); }]
+  ];
+  function homeCfg() {
+    var c = null;
+    try { c = JSON.parse(localStorage.getItem(HOME_KEY) || "null"); } catch (e) {}
+    var keys = HOME_CARDS.map(function (x) { return x[0]; });
+    var order = (c && c.order || []).filter(function (k) { return keys.indexOf(k) >= 0; });
+    keys.forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });  // 새로 생긴 카드는 맨 뒤에
+    return { order: order, hidden: (c && c.hidden) || [] };
+  }
+  function homeSave(c) { try { localStorage.setItem(HOME_KEY, JSON.stringify(c)); } catch (e) {} }
+  function homeCard(k) { return HOME_CARDS.filter(function (x) { return x[0] === k; })[0]; }
+  function homeEditView() {
+    var c = homeCfg();
+    var rows = c.order.map(function (k, i) {
+      var card = homeCard(k), on = c.hidden.indexOf(k) < 0;
+      return '<li class="he-row' + (on ? "" : " off") + '"><span class="he-nm">' + t(card[1]) + "</span>" +
+        '<span class="he-ctl"><button type="button" class="he-mv" data-home-mv="' + k + ':-1"' + (i === 0 ? " disabled" : "") + ' aria-label="' + esc(tt({ ko: "위로", en: "Move up" })) + '">↑</button>' +
+        '<button type="button" class="he-mv" data-home-mv="' + k + ':1"' + (i === c.order.length - 1 ? " disabled" : "") + ' aria-label="' + esc(tt({ ko: "아래로", en: "Move down" })) + '">↓</button>' +
+        '<button type="button" class="tgl" data-home-tg="' + k + '" aria-pressed="' + on + '">' + t(on ? { ko: "보임", en: "Shown" } : { ko: "숨김", en: "Hidden" }) + "</button></span></li>";
+    }).join("");
+    return '<section class="card"><h2>' + t({ ko: "첫 화면 편집", en: "Edit home screen" }) + "</h2>" +
+      '<p class="sub">' + t({ ko: "'전체' 화면에 보일 카드와 순서를 고르세요. 이 기기에만 저장됩니다. 내용이 없는 날의 카드(예: 방금 나온 지표)는 보이게 해 두어도 나타나지 않습니다.",
+        en: "Choose which cards appear on Home and in what order. Saved on this device only. Cards with nothing to show that day (e.g. Just released) stay hidden even when switched on." }) + "</p>" +
+      '<ul class="he-list">' + rows + "</ul>" +
+      '<div class="btn-row"><button type="button" class="refresh gate-go" data-home-done>' + t({ ko: "완료", en: "Done editing" }) + "</button>" +
+      '<button type="button" class="linkbtn" data-home-reset>' + t({ ko: "기본값으로", en: "Reset to default" }) + "</button></div></section>";
+  }
   function allView() {
-    return flashSection() + briefSection() + weeklySection() + recordSection() + releaseSection() + alertBox() + installBox() + fxSection() +
+    if (view.editHome) return homeEditView();
+    var c = homeCfg();
+    return c.order.filter(function (k) { return c.hidden.indexOf(k) < 0; }).map(function (k) { return homeCard(k)[2](); }).join("") +
+      '<div class="btn-row he-open"><button type="button" class="linkbtn" data-home-edit>✎ ' + t({ ko: "첫 화면 편집", en: "Edit home screen" }) + "</button></div>" +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
 
@@ -818,7 +992,7 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       var proTab = ["proall", "pro", "assets", "fxpro"].indexOf(view.tab) >= 0;  // PRO 메뉴 버튼을 보여 줄 화면
@@ -849,6 +1023,7 @@
           return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
         }).join("") + "</div></div>" +
+        (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
         (auth.session ? '<div class="mn-group"><button type="button" class="mn-item mn-logout" data-auth="logout">' +
           '<span class="mn-l"><span class="mn-nm">' + t({ ko: "로그아웃", en: "Sign out" }) + '</span><span class="mn-sub">' + esc(auth.session.email || "") + "</span></span>" +
           '<span class="mn-r"><span class="mn-chev" aria-hidden="true">›</span></span></button></div>' : "") +
@@ -1564,7 +1739,13 @@
       else if (e.key === "End") { setCursor(box, 1e9); e.preventDefault(); }
     });
   }
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeZoom(); openMenu(false); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeZoom(); openMenu(false); closeShare(); } });
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest || !document.getElementById("share-sheet")) return;
+    if (e.target.closest("[data-share-x]") || e.target.id === "share-sheet") { closeShare(); return; }
+    var g = e.target.closest("[data-share-go]");
+    if (g) shareGo(g.dataset.shareGo);
+  });
   var menuOpen = null;
   function openMenu(on, id) {
     if (!on) id = menuOpen;
@@ -2473,6 +2654,8 @@
       body = f ? folderDetail(f) : proOverview();
     } else if (view.tab === "proall" && pro) {
       body = proAllView();
+    } else if (view.tab === "admin") {
+      body = adminView();
     } else if (view.tab === "calc" && data.fx) {
       body = calcView();
     } else if (view.tab === "countries" && countryList().length) {
@@ -2553,6 +2736,7 @@
     opts = opts || {};
     var h = { apikey: SB.anon, "Content-Type": "application/json" };
     if (opts.token) h.Authorization = "Bearer " + opts.token;
+    if (opts.prefer) h.Prefer = opts.prefer;
     return fetch(SB.url.replace(/\/$/, "") + path, { method: opts.method || "GET", headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined, cache: "no-store" });
   }
   function saveSession(j) {
@@ -2569,9 +2753,15 @@
       .then(function (j) { if (!j) { saveSession(null); return null; } saveSession(j); return j.access_token; });
   }
   // 서버의 pro.json. 로그인 안 했으면 null, 회원이 아니면 auth.member=false
+  function checkAdmin(tok) {  // supabase/admin.sql 의 is_admin() — 관리자 메뉴를 보일지
+    sbFetch("/rest/v1/rpc/is_admin", { method: "POST", token: tok, body: {} })
+      .then(function (r) { return r.ok ? r.json() : false; })
+      .then(function (v) { var was = auth.admin; auth.admin = v === true; if (was !== auth.admin && data) render(); }, function () {});
+  }
   function fetchServerPro() {
     return freshToken().then(function (tok) {
       if (!tok) return null;
+      checkAdmin(tok);
       return sbFetch("/storage/v1/object/authenticated/pro/pro.json?t=" + Date.now(), { token: tok }).then(function (r) {
         if (r.ok) { auth.member = true; auth.nodata = false; return r.json(); }
         // 정책상 명단에 없어도 '없는 파일'로 응답하므로, 명단(본인 행)을 따로 확인해 원인을 구분한다
@@ -2585,6 +2775,51 @@
       });
     });
   }
+  // ---------- 관리자 화면 (supabase/admin.sql) ----------
+  var admin = { rows: null, q: "", busy: false, msg: null };
+  function adminRpc(name, body) {
+    return freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      return sbFetch("/rest/v1/rpc/" + name, { method: "POST", token: tok, body: body }).then(function (r) {
+        return r.text().then(function (txt) { if (!r.ok) throw new Error(txt || String(r.status)); return txt ? JSON.parse(txt) : null; });
+      });
+    });
+  }
+  function adminLoad() {
+    admin.busy = true; admin.msg = null; render();
+    adminRpc("admin_list_members", { q: admin.q || null }).then(function (rows) { admin.rows = rows || []; admin.busy = false; render(); },
+      function () { admin.busy = false; admin.msg = { ko: "회원 목록을 불러오지 못했습니다. 관리자 설정(SQL)을 했는지 확인하세요.", en: "Couldn't load members. Check that the admin SQL setup was run." }; render(); });
+  }
+  function adminView() {
+    if (!auth.admin) return '<section class="card"><h2>' + t({ ko: "관리자", en: "Admin" }) + '</h2><p class="sub">' + t({ ko: "관리자 계정으로 로그인해야 볼 수 있습니다.", en: "Sign in with an admin account to see this." }) + "</p></section>";
+    if (admin.rows == null && !admin.busy) setTimeout(adminLoad, 0);
+    var fmt = function (v) { return v ? String(v).slice(0, 10) : "–"; };
+    var rows = (admin.rows || []).map(function (u) {
+      return '<li class="ad-row"><div class="ad-l"><b>' + esc(u.email || "–") + "</b>" +
+        '<span class="ad-sub">' + t({ ko: "가입 " + fmt(u.created_at) + " · 최근 로그인 " + fmt(u.last_sign_in_at), en: "Joined " + fmt(u.created_at) + " · last sign-in " + fmt(u.last_sign_in_at) }) + "</span>" +
+        '<span class="ad-sub">' + (u.is_pro ? '<span class="pro-badge">PRO</span> ' + t(u.pro_until ? { ko: u.pro_until + "까지", en: "until " + u.pro_until } : { ko: "기한 없음", en: "no end date" }) : t({ ko: "무료 회원", en: "Free member" })) + "</span></div>" +
+        '<div class="ad-r">' + (u.is_pro
+          ? '<button type="button" class="tgl" data-admin-off="' + esc(u.user_id) + '">' + t({ ko: "PRO 끄기", en: "Turn off PRO" }) + "</button>"
+          : '<input type="date" class="ad-date" data-admin-until="' + esc(u.user_id) + '" aria-label="' + esc(tt({ ko: "PRO 기한 (비우면 기한 없음)", en: "PRO end date (blank = no end)" })) + '">' +
+            '<button type="button" class="tgl" aria-pressed="true" data-admin-on="' + esc(u.user_id) + '">' + t({ ko: "PRO 켜기", en: "Turn on PRO" }) + "</button>") + "</div></li>";
+    }).join("");
+    var pros = (admin.rows || []).filter(function (u) { return u.is_pro; }).length;
+    return '<section class="card"><h2>' + t({ ko: "회원 관리", en: "Members" }) + "</h2>" +
+      '<p class="sub">' + t({ ko: "이메일 일부로 검색하고, PRO를 켜거나 끕니다. 켤 때 날짜를 고르면 그날까지만 PRO가 열리고, 비워 두면 기한이 없습니다.", en: "Search by part of an email and turn PRO on or off. Pick a date to make PRO expire then; leave it blank for no end date." }) + "</p>" +
+      '<form class="ad-search" data-adminform><input type="search" name="q" value="' + esc(admin.q) + '" placeholder="' + esc(tt({ ko: "이메일 검색", en: "Search email" })) + '">' +
+      '<button type="submit" class="refresh">' + t({ ko: "검색", en: "Search" }) + "</button></form>" +
+      (admin.busy ? '<p class="note">' + t({ ko: "불러오는 중…", en: "Loading…" }) + "</p>" : "") +
+      (admin.msg ? '<p class="note warn">' + t(admin.msg) + "</p>" : "") +
+      (admin.rows ? '<p class="note">' + t({ ko: admin.rows.length + "명 (PRO " + pros + "명)" + (admin.rows.length >= 200 ? " · 최근 200명까지 표시" : ""), en: admin.rows.length + " members (" + pros + " PRO)" + (admin.rows.length >= 200 ? " · showing the latest 200" : "") }) + "</p>" : "") +
+      '<ul class="ad-list">' + rows + "</ul></section>";
+  }
+  function adminSet(uid, on, until) {
+    admin.busy = true; render();
+    adminRpc("admin_set_pro", { target: uid, turn_on: on, until_date: until || null }).then(adminLoad, function () {
+      admin.busy = false; admin.msg = { ko: "바꾸지 못했습니다. 잠시 뒤 다시 시도하세요.", en: "Couldn't change it. Try again shortly." }; render();
+    });
+  }
+
   function lockedView() {
     var asset = view.tab === "assets", fxt = view.tab === "fxpro";
     return '<section class="card"><h2>' + t(asset ? UI.tabAssets : fxt ? UI.tabFx : UI.tabPro) + ' <span class="pro-badge">PRO</span></h2>' +
@@ -2689,6 +2924,8 @@
   app.addEventListener("submit", function (e) {
     var f = e.target.closest("[data-authform]");
     if (f) { e.preventDefault(); if (f.dataset.authform === "forgot" || f.dataset.authform === "newpw") recoverySubmit(f); else authSubmit(f); }
+    var af = e.target.closest("[data-adminform]");
+    if (af) { e.preventDefault(); admin.q = af.querySelector('[name="q"]').value.trim(); adminLoad(); }
   });
   function onCalcInput(e) {
     var x = e.target.closest && e.target.closest("[data-calc]");
@@ -2786,7 +3023,7 @@
     swMove(-dir * (w + GAP), true);
     setTimeout(function () {
       var y = Math.max(0, scrollY - g.top);  // 옆 화면이 보이던 자리 그대로 이어지게
-      view.tab = g.tab; view.folder = null;
+      view.tab = g.tab; view.folder = null; view.editHome = false;
       render();
       scrollTo(0, y);
       swBusy = false;
@@ -2802,6 +3039,7 @@
       try { localStorage.setItem(STORE, b.dataset.lang); } catch (err) {}
       if (b.classList.contains("mn-lang")) openMenu(false);
       extSet({ lang: b.dataset.lang });
+      pushSync();
       if (view.tab === "calc") { view.calc = null; render(); }  // 금액 단위(만원/$)가 언어를 따라간다
       if ((!view.fxBase && view.tab === "all" && data && data.fx) || (view.tab === "all" && extOn())) render();  // 환율 기본 기준(한국어=원, 영어=달러)이 언어를 따라가도록
       return;
@@ -2810,12 +3048,33 @@
     var ab0 = e.target.closest("[data-auth]");
     if (ab0) {
       var act = ab0.dataset.auth;
-      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.nodata = false; auth.step = "signin"; render(); }
+      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.admin = false; admin.rows = null; if (view.tab === "admin") view.tab = "all"; auth.nodata = false; auth.step = "signin"; render(); }
       else if (act === "tosignup") { auth.step = "signup"; auth.msg = null; render(); }
       else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
       else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }
       else if (act === "retry") { fetchServerPro().then(function (p) { pro = p; render(); }); }
       return;
+    }
+    if (e.target.closest("[data-share]")) { shareSheet(); return; }
+    if (e.target.closest("[data-push]")) { pushToggle(); return; }
+    var aon = e.target.closest("[data-admin-on]");
+    if (aon) { var ui = app.querySelector('[data-admin-until="' + aon.dataset.adminOn + '"]'); adminSet(aon.dataset.adminOn, true, ui && ui.value); return; }
+    var aoff = e.target.closest("[data-admin-off]");
+    if (aoff) { adminSet(aoff.dataset.adminOff, false); return; }
+    if (e.target.closest("[data-home-edit]")) { view.editHome = true; render(); scrollTo(0, 0); return; }
+    if (e.target.closest("[data-home-done]")) { view.editHome = false; render(); scrollTo(0, 0); return; }
+    if (e.target.closest("[data-home-reset]")) { try { localStorage.removeItem(HOME_KEY); } catch (err) {} render(); return; }
+    var hm = e.target.closest("[data-home-mv]");
+    if (hm) {
+      var hp = hm.dataset.homeMv.split(":"), hc = homeCfg(), hi = hc.order.indexOf(hp[0]), hj = hi + +hp[1];
+      if (hi >= 0 && hj >= 0 && hj < hc.order.length) { hc.order.splice(hj, 0, hc.order.splice(hi, 1)[0]); homeSave(hc); render(); }
+      return;
+    }
+    var ht = e.target.closest("[data-home-tg]");
+    if (ht) {
+      var tc = homeCfg(), tk = ht.dataset.homeTg, ti = tc.hidden.indexOf(tk);
+      if (ti >= 0) tc.hidden.splice(ti, 1); else tc.hidden.push(tk);
+      homeSave(tc); render(); return;
     }
     var lt = e.target.closest("[data-langtoggle]");
     if (lt) {
@@ -2862,7 +3121,7 @@
     }
     var tb = e.target.closest("[data-tab]");
     if (tb) {
-      document.documentElement.classList.remove("mn-open"); menuOpen = null;
+      document.documentElement.classList.remove("mn-open"); menuOpen = null; view.editHome = false;
       view.tab = tb.dataset.tab; view.folder = null;
       render(); scrollTo(0, 0); return;
     }
