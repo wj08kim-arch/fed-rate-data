@@ -661,6 +661,7 @@
     return head + (push.msg ? '<p class="note">' + t(push.msg) + "</p>" : "") + '</div><button type="button" class="tgl" data-push aria-pressed="' + push.on + '"' + (push.busy ? " disabled" : "") + ">" +
       t(push.busy ? { ko: "…", en: "…" } : push.on ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></section>";
   }
+  function alertsAvail() { return extOn() || (pwa.on && serverOn() && !!window.FED_VAPID_PUBLIC); }
   function alertBox() {
     if (!extOn()) return phonePushBox();
     return '<section class="card alertbox"><div><h2>' + t({ ko: "알림", en: "Alerts" }) + '</h2><p class="sub">' +
@@ -717,7 +718,6 @@
     ["record", { ko: "우리 전망 vs 실제 결과", en: "Our calls vs. actual decisions" }, function () { return recordSection(); }],
     ["releases", { ko: "미국 주요 지표 발표", en: "Key US data releases" }, function () { return releaseSection(); }],
     ["fx", { ko: "주요 통화 환율", en: "Major currencies" }, function () { return fxSection(); }],
-    ["alerts", { ko: "알림", en: "Alerts" }, function () { return alertBox(); }],
     ["install", { ko: "휴대폰 홈 화면에 설치", en: "Add to your home screen" }, function () { return installBox(); }]
   ];
   function homeCfg() {
@@ -747,10 +747,8 @@
       '<button type="button" class="linkbtn" data-home-reset>' + t({ ko: "기본값으로", en: "Reset to default" }) + "</button></div></section>";
   }
   function allView() {
-    if (view.editHome) return homeEditView();
     var c = homeCfg();
     return c.order.filter(function (k) { return c.hidden.indexOf(k) < 0; }).map(function (k) { return homeCard(k)[2](); }).join("") +
-      '<div class="btn-row he-open"><button type="button" class="linkbtn" data-home-edit>✎ ' + t({ ko: "첫 화면 편집", en: "Edit home screen" }) + "</button></div>" +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
 
@@ -992,7 +990,7 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "setalert" ? (extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }) : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       var proTab = ["proall", "pro", "assets", "fxpro"].indexOf(view.tab) >= 0;  // PRO 메뉴 버튼을 보여 줄 화면
@@ -1024,6 +1022,9 @@
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
         }).join("") + "</div></div>" +
         (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
+        '<div class="mn-group"><div class="mn-h">' + t({ ko: "설정", en: "Settings" }) + "</div>" +
+          item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
+          (alertsAvail() ? item("setalert", extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }, "", false, { ko: "금리 결정·지표 발표·주간 요약 알림 켜기·끄기", en: "Turn alerts for decisions, releases and weekly summary on/off" }) : "") + "</div>" +
         (auth.session ? '<div class="mn-group"><button type="button" class="mn-item mn-logout" data-auth="logout">' +
           '<span class="mn-l"><span class="mn-nm">' + t({ ko: "로그아웃", en: "Sign out" }) + '</span><span class="mn-sub">' + esc(auth.session.email || "") + "</span></span>" +
           '<span class="mn-r"><span class="mn-chev" aria-hidden="true">›</span></span></button></div>' : "") +
@@ -2654,6 +2655,10 @@
       body = f ? folderDetail(f) : proOverview();
     } else if (view.tab === "proall" && pro) {
       body = proAllView();
+    } else if (view.tab === "sethome") {
+      body = homeEditView();
+    } else if (view.tab === "setalert") {
+      body = alertBox() || '<section class="card"><p class="sub">' + t({ ko: "이 화면에서는 알림을 켤 수 없습니다. 휴대폰 홈 화면에 설치한 앱에서 켜 주세요.", en: "Notifications can't be turned on here. Use the app installed on your phone's home screen." }) + "</p></section>";
     } else if (view.tab === "admin") {
       body = adminView();
     } else if (view.tab === "calc" && data.fx) {
@@ -3023,7 +3028,7 @@
     swMove(-dir * (w + GAP), true);
     setTimeout(function () {
       var y = Math.max(0, scrollY - g.top);  // 옆 화면이 보이던 자리 그대로 이어지게
-      view.tab = g.tab; view.folder = null; view.editHome = false;
+      view.tab = g.tab; view.folder = null;
       render();
       scrollTo(0, y);
       swBusy = false;
@@ -3061,8 +3066,7 @@
     if (aon) { var ui = app.querySelector('[data-admin-until="' + aon.dataset.adminOn + '"]'); adminSet(aon.dataset.adminOn, true, ui && ui.value); return; }
     var aoff = e.target.closest("[data-admin-off]");
     if (aoff) { adminSet(aoff.dataset.adminOff, false); return; }
-    if (e.target.closest("[data-home-edit]")) { view.editHome = true; render(); scrollTo(0, 0); return; }
-    if (e.target.closest("[data-home-done]")) { view.editHome = false; render(); scrollTo(0, 0); return; }
+    if (e.target.closest("[data-home-done]")) { view.tab = "all"; view.folder = null; render(); scrollTo(0, 0); return; }
     if (e.target.closest("[data-home-reset]")) { try { localStorage.removeItem(HOME_KEY); } catch (err) {} render(); return; }
     var hm = e.target.closest("[data-home-mv]");
     if (hm) {
@@ -3121,7 +3125,7 @@
     }
     var tb = e.target.closest("[data-tab]");
     if (tb) {
-      document.documentElement.classList.remove("mn-open"); menuOpen = null; view.editHome = false;
+      document.documentElement.classList.remove("mn-open"); menuOpen = null;
       view.tab = tb.dataset.tab; view.folder = null;
       render(); scrollTo(0, 0); return;
     }
