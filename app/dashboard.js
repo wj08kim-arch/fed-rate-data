@@ -2444,9 +2444,7 @@
       '<section class="card gate-card"><h1>' + t(UI.title) + "</h1>" +
       '<p class="sub">' + t({ ko: "로그인하면 무료 화면을 볼 수 있습니다. 경제학자·자산·환율 폴더는 PRO 회원만 열립니다.", en: "Sign in to see the free screens. Economist, asset and currency folders are for PRO members." }) + "</p>" + body + msg + "</section></div>";
   }
-  function render() {
-    if (acctOn()) { app.innerHTML = acctView(); setLang(root.lang); return; }
-    if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
+  function bodyHtml() {  // 지금 view 상태의 본문 (스와이프 미리보기에도 쓴다)
     var body;
     if (window.__FED_ALL__ && pro) {
       // 공유용 PDF: 오늘의 전망 + PRO 요약 + 폴더 전체를 한 문서에
@@ -2484,7 +2482,13 @@
     } else {
       body = overview();
     }
-    app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + '<div class="pg-body">' + body + "</div></div>";
+    return body;
+  }
+  function render() {
+    if (acctOn()) { app.innerHTML = acctView(); setLang(root.lang); return; }
+    if (gateOn()) { app.innerHTML = gateView(); setLang(root.lang); return; }
+    var body = bodyHtml();
+    app.innerHTML = '<div class="wrap">' + header(!window.__FED_DATA__) + '<div class="pg-track"><div class="pg-body">' + body + "</div></div></div>";
     setLang(root.lang);
     initCharts(app);
     mountPx(app);
@@ -2708,21 +2712,49 @@
     if (view.tab === "calc") return ["all", "calc"];
     return null;
   }
-  // 손가락을 따라 화면이 움직이고, 충분히 밀면 옆 화면이 들어온다 (덜 밀면 제자리로)
-  var sw = null, swBusy = false;
+  // 손가락을 따라 지금 화면과 옆 화면이 함께 움직이고, 충분히 밀면 옆 화면으로 넘어간다 (덜 밀면 제자리로)
+  var sw = null, swBusy = false, GAP = 16;
   function swNeighbor(dir) {
     var seq = swipeSeq();
     if (!seq) return null;
     var i = seq.indexOf(view.tab), j = i + dir;
     return i < 0 || j < 0 || j >= seq.length ? null : seq[j];
   }
-  function swPane() { return app.querySelector(".pg-body"); }
+  function swTrack() { return app.querySelector(".pg-track"); }
+  function swGhost(dir, tab) {  // 옆 화면을 미리 그려 지금 화면 옆에 붙인다
+    var tr = swTrack();
+    if (!tr) return null;
+    var old = tr.querySelector(".pg-ghost");
+    if (old) old.remove();
+    if (!tab) return null;
+    var keep = { tab: view.tab, folder: view.folder }, html = "";
+    view.tab = tab; view.folder = null;
+    try { html = bodyHtml(); } catch (e) { html = ""; }
+    view.tab = keep.tab; view.folder = keep.folder;
+    var g = document.createElement("div");
+    g.className = "pg-body pg-ghost";
+    g.setAttribute("aria-hidden", "true");
+    g.innerHTML = html;
+    var stick = app.querySelector(".mbar"), sh = stick ? stick.getBoundingClientRect().height : 0;
+    var top = Math.max(0, scrollY + sh - (tr.getBoundingClientRect().top + scrollY));  // 지금 보이는 높이에 맞춰 옆 화면의 맨 위를 둔다
+    g.style.top = top + "px";
+    g.style.left = dir > 0 ? "calc(100% + " + GAP + "px)" : "calc(-100% - " + GAP + "px)";
+    tr.appendChild(g);
+    try { initCharts(g); mountPx(g); } catch (e) {}
+    return { el: g, dir: dir, tab: tab, top: top };
+  }
+  function swMove(x, animate) {
+    var tr = swTrack();
+    if (!tr) return;
+    tr.style.transition = animate ? "transform .24s cubic-bezier(.2,.8,.2,1)" : "none";
+    tr.style.transform = x ? "translate3d(" + x + "px,0,0)" : "";
+  }
   app.addEventListener("touchstart", function (e) {
     sw = null;
-    if (swBusy || e.touches.length !== 1 || menuOpen || zoomState || !data || !swPane()) return;
+    if (swBusy || e.touches.length !== 1 || menuOpen || zoomState || !data || !swTrack()) return;
     if (e.target.closest(".chart, svg, input, select, textarea, .tbl, .tabs, .fxcards, .seg-btn, .mbar-gos, .mn-sheet, header, .mbar")) return;
     var tch = e.touches[0];
-    sw = { x: tch.clientX, y: tch.clientY, t: Date.now(), lock: null, dx: 0, lastX: tch.clientX, lastT: Date.now(), v: 0 };
+    sw = { x: tch.clientX, y: tch.clientY, lock: null, dx: 0, lastX: tch.clientX, lastT: Date.now(), v: 0, g: null };
   }, { passive: true });
   app.addEventListener("touchmove", function (e) {
     if (!sw) return;
@@ -2731,39 +2763,34 @@
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       sw.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
       if (sw.lock === "y") { sw = null; return; }
-      sw.next = swNeighbor(dx < 0 ? 1 : -1);
     }
     var now = Date.now();
     sw.v = (tch.clientX - sw.lastX) / Math.max(now - sw.lastT, 1);
     sw.lastX = tch.clientX; sw.lastT = now;
-    var dir = dx < 0 ? 1 : -1;
-    if (swNeighbor(dir) !== sw.next) sw.next = swNeighbor(dir);
-    sw.dx = sw.next ? dx : dx * 0.25;  // 끝 화면에서는 고무줄처럼 조금만
-    var pane = swPane();
-    if (pane) { pane.style.transition = "none"; pane.style.transform = "translate3d(" + sw.dx + "px,0,0)"; pane.style.opacity = String(1 - Math.min(Math.abs(sw.dx) / innerWidth, 1) * 0.35); }
+    var dir = dx < 0 ? 1 : -1, next = swNeighbor(dir);
+    if (!sw.g || sw.g.dir !== dir) sw.g = swGhost(dir, next);
+    sw.dx = next ? dx : dx * 0.25;  // 끝 화면에서는 고무줄처럼 조금만
+    swMove(sw.dx, false);
   }, { passive: true });
   function swEnd() {
     if (!sw || sw.lock !== "x") { sw = null; return; }
     var s0 = sw; sw = null;
-    var pane = swPane(), w = innerWidth, dir = s0.dx < 0 ? 1 : -1, next = swNeighbor(dir);
-    var go = next && (Math.abs(s0.dx) > w * 0.25 || (Math.abs(s0.v) > 0.45 && Math.abs(s0.dx) > 30 && (s0.v < 0) === (dir > 0)));
-    if (!pane) return;
-    pane.style.transition = "transform .18s ease-out, opacity .18s ease-out";
-    if (!go) { pane.style.transform = ""; pane.style.opacity = ""; return; }
+    var w = (swTrack() || app).getBoundingClientRect().width, dir = s0.dx < 0 ? 1 : -1, g = s0.g;
+    var go = g && g.tab && g.dir === dir && (Math.abs(s0.dx) > w * 0.25 || (Math.abs(s0.v) > 0.45 && Math.abs(s0.dx) > 30 && (s0.v < 0) === (dir > 0)));
     swBusy = true;
-    pane.style.transform = "translate3d(" + (-dir * w) + "px,0,0)"; pane.style.opacity = "0";
+    if (!go) {
+      swMove(0, true);
+      setTimeout(function () { swGhost(0, null); swMove(0, false); swBusy = false; }, 250);
+      return;
+    }
+    swMove(-dir * (w + GAP), true);
     setTimeout(function () {
-      view.tab = next; view.folder = null;
-      render(); scrollTo(0, 0);
-      var p2 = swPane();
-      if (p2) {
-        p2.style.transition = "none"; p2.style.transform = "translate3d(" + (dir * w * 0.35) + "px,0,0)"; p2.style.opacity = "0";
-        void p2.offsetWidth;
-        p2.style.transition = "transform .24s cubic-bezier(.2,.8,.2,1), opacity .24s ease-out";
-        p2.style.transform = ""; p2.style.opacity = "";
-      }
-      setTimeout(function () { swBusy = false; }, 260);
-    }, 170);
+      var y = Math.max(0, scrollY - g.top);  // 옆 화면이 보이던 자리 그대로 이어지게
+      view.tab = g.tab; view.folder = null;
+      render();
+      scrollTo(0, y);
+      swBusy = false;
+    }, 250);
   }
   app.addEventListener("touchend", swEnd, { passive: true });
   app.addEventListener("touchcancel", function () { if (sw && sw.lock === "x") { sw.dx = 0; swEnd(); } else sw = null; }, { passive: true });

@@ -726,6 +726,7 @@ header .hdr-right { flex: none; margin-left: auto; }
 .mn-logout .mn-nm { color: var(--ink-2); }
 
 /* 좌우로 밀어서 넘기기: 손가락을 따라 움직이는 본문 영역 */
-.pg-body { touch-action: pan-y; }
+.pg-track { position: relative; touch-action: pan-y; }
+.pg-ghost { position: absolute; width: 100%; pointer-events: none; }
 .wrap { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) { .pg-body { transition: none !important; } }
