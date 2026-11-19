@@ -1013,18 +1013,20 @@
         '<div class="mn-sheet" data-html2canvas-ignore id="mn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(tt({ ko: "메뉴", en: "Menu" })) + '" hidden><div class="mn-inner">' +
         '<div class="mn-top"><b>' + t({ ko: "메뉴", en: "Menu" }) + '</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
         groups.map(function (g) { return '<div class="mn-group"><div class="mn-h">' + t(g[0]) + "</div>" + (g[2] ? '<div class="mn-hint">' + t(g[2]) + "</div>" : "") + g[1] + "</div>"; }).join("") +
-        '<div class="mn-group mn-langs"><button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
+
+        (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
+        '<div class="mn-group"><div class="mn-h">' + t({ ko: "설정", en: "Settings" }) + "</div>" +
+          item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
+          (alertsAvail() ? item("setalert", extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }, "", false, { ko: "금리 결정·지표 발표·주간 요약 알림 켜기·끄기", en: "Turn alerts for decisions, releases and weekly summary on/off" }) : "") + 
+          '<button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
           '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", es: "Idioma" }) + "</span></span>" +
           '<span class="mn-r"><b class="mn-curlang">' + LANGS.map(function (l) { return '<span class="' + l + '">' + LANG_NAME[l] + "</span>"; }).join("") + '</b><span class="mn-chev mn-caret" aria-hidden="true">›</span></span></button>' +
           '<div class="mn-langlist" id="mn-langlist" hidden>' +
         LANGS.map(function (l) {
           return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
-        }).join("") + "</div></div>" +
-        (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
-        '<div class="mn-group"><div class="mn-h">' + t({ ko: "설정", en: "Settings" }) + "</div>" +
-          item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
-          (alertsAvail() ? item("setalert", extOn() ? { ko: "알림", en: "Alerts" } : { ko: "휴대폰 알림", en: "Phone notifications" }, "", false, { ko: "금리 결정·지표 발표·주간 요약 알림 켜기·끄기", en: "Turn alerts for decisions, releases and weekly summary on/off" }) : "") + "</div>" +
+        }).join("") + "</div>" +
+          "</div>" +
         (auth.session ? '<div class="mn-group"><button type="button" class="mn-item mn-logout" data-auth="logout">' +
           '<span class="mn-l"><span class="mn-nm">' + t({ ko: "로그아웃", en: "Sign out" }) + '</span><span class="mn-sub">' + esc(auth.session.email || "") + "</span></span>" +
           '<span class="mn-r"><span class="mn-chev" aria-hidden="true">›</span></span></button></div>' : "") +
