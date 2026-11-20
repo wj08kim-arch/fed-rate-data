@@ -790,16 +790,18 @@
         '<button type="button" class="acard' + (on ? " pinned" : "") + '" data-tab="' + r.tab + '">' +
         '<span class="ac-top"><span class="ac-nm">' + t(r.name) + "</span>" + (r.rate ? '<span class="ac-rate">' + r.rate + "</span>" : "") + "</span>" +
         '<span class="ac-sig">' + lab + '<span class="ac-kind">' + t(r.kind === "last" ? { ko: "최근 결정", en: "Latest decision" } : { ko: "전망", en: "Outlook" }) + "</span></span>" +
-        '<span class="ac-why">' + t(r.why) + "</span></button></div>";
+        "</button></div>";
     }).join("");
     return '<section class="card"><h2>' + t({ ko: "나라별 금리 방향", en: "Rate direction by country" }) + "</h2>" +
       '<p class="sub">' + t({ ko: "전망 기준 " + cnt["1"] + "곳 인상 · " + cnt["0"] + "곳 동결 · " + cnt["-1"] + "곳 인하. 카드를 누르면 그 나라 화면으로 갑니다.",
-        en: "Outlook: " + cnt["1"] + " hike · " + cnt["0"] + " hold · " + cnt["-1"] + " cut. Tap a card for that country." }) + " " + t({ ko: "☆을 누르면 그 나라를 맨 위에 고정합니다.", en: "Tap ☆ to pin a country to the top." }) + "</p>" +
+        en: "Outlook: " + cnt["1"] + " hike · " + cnt["0"] + " hold · " + cnt["-1"] + " cut. Tap a card for that country." }) + "</p>" +
       '<div class="acards">' + cards + "</div>" +
-      '<p class="note">' + t({ ko: "전망: 미국은 다음 FOMC 확률, 한국·유럽·일본·스위스는 물가·고용으로 본 적정금리와 현재 금리의 차이(0.5%p 넘으면 인상·인하), 홍콩은 연준을 따라갑니다. " +
-        "최근 결정: 싱가포르(환율로 정책)와 중국(공식이 맞지 않음)은 앞으로의 판단 대신 가장 최근 실제 결정을 보여 줍니다.",
-        en: "Outlook: the US uses next-FOMC odds; Korea, the euro area, Japan and Switzerland compare the fair rate from inflation and jobs with today's rate (beyond 0.5pp = hike or cut); Hong Kong follows the Fed. " +
-        "Latest decision: Singapore (policy via the exchange rate) and China (formulas don't fit) show their most recent actual move instead of a call." }) + "</p></section>" +
+      detailsBlock({ ko: "이 판단은 어떻게 나오나요?", en: "How are these calls made?" }, [
+        [{ ko: "전망", en: "Outlook" }, { ko: "미국은 다음 FOMC 확률, 한국·유럽·일본·스위스·영국·캐나다·호주는 물가·고용으로 본 적정금리와 현재 금리의 차이(0.5%p 넘으면 인상·인하), 홍콩은 연준을 따라갑니다.",
+          en: "The US uses next-FOMC odds; Korea, the euro area, Japan, Switzerland, the UK, Canada and Australia compare the fair rate from inflation and jobs with today's rate (beyond 0.5pp = hike or cut); Hong Kong follows the Fed." }],
+        [{ ko: "최근 결정", en: "Latest decision" }, { ko: "싱가포르(환율로 정책)와 중국(공식이 맞지 않음)은 앞으로의 판단 대신 가장 최근 실제 결정을 보여 줍니다.",
+          en: "Singapore (policy via the exchange rate) and China (formulas don't fit) show their most recent actual move instead of a call." }],
+        [{ ko: "고정", en: "Pinning" }, { ko: "☆을 누르면 그 나라를 맨 위에 고정합니다.", en: "Tap ☆ to pin a country to the top." }]]) + "</section>" +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
   // 첫 화면('전체') 카드: 보일지·순서를 사용자가 정한다 (이 기기에 저장)
@@ -839,9 +841,69 @@
       '<div class="btn-row"><button type="button" class="refresh gate-go" data-home-done>' + t({ ko: "완료", en: "Done editing" }) + "</button>" +
       '<button type="button" class="linkbtn" data-home-reset>' + t({ ko: "기본값으로", en: "Reset to default" }) + "</button></div></section>";
   }
+  // 첫 화면 요약 카드: 제목 줄 전체가 버튼, 누르면 그 카드의 전체 내용(카드 상세 페이지)
+  function miniCard(key, title, body, eyebrow) {
+    return '<section class="card mini"><button type="button" class="mini-hd" data-card="' + key + '">' +
+      '<span class="mini-t">' + (eyebrow ? '<span class="eyebrow">' + eyebrow + "</span>" : "") + "<b>" + t(title) + "</b></span>" +
+      '<span class="mini-go">' + t({ ko: "자세히", en: "More" }) + ' <span aria-hidden="true">›</span></span></button>' + body + "</section>";
+  }
+  var MINI = {
+    flash: function () {
+      var f = data.flash;
+      if (!f || dday(f.date) < -2) return "";
+      var v = (f.values || []).filter(function (x) { return x.value != null; })[0];
+      return miniCard("flash", f.name, v ? '<p class="mini-line">' + t(v.name) + " <b>" + num(v.value, 2) + t(v.unit) + "</b>" +
+        (v.prev != null ? ' <span class="lab">' + t({ ko: "직전 ", en: "prev " }) + num(v.prev, 2) + t(v.unit) + "</span>" : "") + "</p>" : "",
+        t({ ko: "방금 나온 지표", en: "Just released" }) + " · " + calDate({ d: f.date }));
+    },
+    weekly: function () {
+      var w = data.weekly;
+      if (!w || !w.lines || !w.lines.length) return "";
+      return miniCard("weekly", { ko: "주간 요약", en: "Week in review" },
+        '<ul class="mini-list">' + w.lines.slice(0, 2).map(function (l) { return "<li>" + t(l) + "</li>"; }).join("") + "</ul>", mdS(w.from) + " ~ " + mdS(w.to));
+    },
+    record: function () {
+      var r = data.calendar && data.calendar.record;
+      if (!r || !r.items || !r.items.length) return "";
+      var done = r.items.filter(function (x) { return x.hit != null; }), hit = done.filter(function (x) { return x.hit; }).length;
+      var last = r.items.filter(function (x) { return x.actual != null; })[0];
+      return miniCard("record", { ko: "우리 전망 vs 실제 결과", en: "Our calls vs. actual decisions" },
+        '<p class="mini-line">' + (done.length ? t({ ko: done.length + "번 중 " + hit + "번 적중", en: hit + " of " + done.length + " right" }) : t({ ko: "아직 채점할 결정이 없습니다", en: "No decisions scored yet" })) +
+        (last ? ' <span class="lab">· ' + t(last.name) + " " + mdS(last.date) + " " + chip(last.actual, false) + "</span>" : "") + "</p>");
+    },
+    releases: function () {
+      var c = data.calendar;
+      if (!c || !c.releases || !c.releases.length) return "";
+      return miniCard("releases", { ko: "미국 주요 지표 발표", en: "Key US data releases" }, '<ul class="mini-rows">' + c.releases.slice(0, 3).map(function (r) {
+        var n = r.next[0];
+        return '<li><span class="cal-dd' + (n && dday(n) <= 7 ? " soon" : "") + '">' + (n ? ddayTxt({ d: n }) : "–") + "</span><span>" + t(r.name) + "</span>" +
+          '<span class="lab">' + (n ? calDate({ d: n }) : "–") + "</span></li>";
+      }).join("") + "</ul>");
+    },
+    fx: function () {
+      var f = data && data.fx;
+      if (!f) return "";
+      var base = fxBase();
+      var rows = FX_ORDER.filter(function (c) { return c !== base; }).slice(0, 4).map(function (c) {
+        var d = fxSeries(f.daily, base, c);
+        if (d.length < 2) return "";
+        var v = d[d.length - 1][1], k = fxScale(v, c), y = (v / fxYearAgo(d) - 1) * 100;
+        return "<li><span>" + t({ ko: (k > 1 ? k + " " : "1 ") + FX_UNIT[c].ko, en: (k > 1 ? k + " " : "1 ") + FX_UNIT[c].en }) + "</span>" +
+          "<b>" + num(v * k, fxDigits(v * k)) + " " + t(FX_UNIT[base]) + "</b>" +
+          '<span class="lab ' + (y > 0.5 ? "up" : y < -0.5 ? "down" : "") + '">' + t({ ko: "1년 ", en: "1y " }) + num(y, 1, true) + "%</span></li>";
+      }).join("");
+      return miniCard("fx", { ko: "주요 통화 환율", en: "Major currencies" }, '<ul class="mini-rows fx">' + rows + "</ul>");
+    }
+  };
+  var CARD_FULL = { flash: function () { return flashSection(); }, weekly: function () { return weeklySection(); }, record: function () { return recordSection(); },
+                    releases: function () { return releaseSection(); }, fx: function () { return fxSection(); } };
+  function cardView() {  // 첫 화면 카드의 전체 내용
+    var f = CARD_FULL[view.card];
+    return (f ? f() : "") || '<section class="card"><p class="sub">' + t({ ko: "보여 줄 내용이 없습니다.", en: "Nothing to show." }) + "</p></section>";
+  }
   function allView() {
     var c = homeCfg();
-    return c.order.filter(function (k) { return c.hidden.indexOf(k) < 0; }).map(function (k) { return homeCard(k)[2](); }).join("") +
+    return c.order.filter(function (k) { return c.hidden.indexOf(k) < 0; }).map(function (k) { return MINI[k] ? MINI[k]() : homeCard(k)[2](); }).join("") +
       "<footer><p>" + t(UI.disc1) + "</p></footer>";
   }
 
@@ -1086,7 +1148,7 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "20개 통화 · 기준 통화 고르기", en: "20 currencies, pick any base" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "card" ? ((HOME_CARDS.filter(function (x) { return x[0] === view.card; })[0] || [0, { ko: "전체", en: "Home" }])[1]) : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       var proTab = ["proall", "pro", "assets", "fxpro"].indexOf(view.tab) >= 0;  // PRO 메뉴 버튼을 보여 줄 화면
@@ -1094,7 +1156,7 @@
       var up = null;
       if (proTab && view.tab !== "proall" && proOn) up = ["proall", { ko: "PRO 전체", en: "All PRO" }];
       else if (view.tab === "overview" || cl.some(function (x) { return x.tab === view.tab; })) up = cl.length ? ["countries", { ko: "금리 전체", en: "All rates" }] : null;
-      else if (view.tab === "calc" && cl.length) up = ["all", { ko: "전체", en: "Home" }];
+      else if ((view.tab === "calc" || view.tab === "card") && cl.length) up = ["all", { ko: "전체", en: "Home" }];
       // 세 '전체' 화면(홈·나라별 금리·PRO)에서는 세 버튼을 메뉴 옆에 두고, 지금 화면 버튼을 눌린 모양으로
       var ALLS = [["all", { ko: "전체", en: "Home" }, true], ["countries", { ko: "금리", en: "Rates" }, !!cl.length], ["proall", { ko: "PRO", en: "PRO" }, !!proOn]];
       var gos = ALLS.some(function (x) { return x[0] === view.tab; }) ? ALLS.filter(function (x) { return x[2]; }).map(function (x) {
@@ -1403,19 +1465,19 @@
       var o = x[1].ours, n = o.now;
       var g = sigGrade(x[1]);
       return row("pro:" + x[0], nameOf[x[0]], '<span class="' + (g && g.lv === "weak" ? "dim" : "") + '">' + chip(n.signal, x[0] === "sg") + "</span>" + (g ? g.html : ""),
-        "", t({ ko: n.total + "개 중 " + n.agree + "개 동의", en: n.agree + " of " + n.total + " agree" }) + " · " + hit(o.score_recent || o.score) + (n.asof ? " · " + esc(n.asof) : ""));
+        "", hit(o.score_recent || o.score));
     }).join("");
     // 2) 자산 6개월 전망
     var assets = ["au", "ol", "sp"].filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
       var a = pro[k], g = sigGrade(a), weak = g && g.lv === "weak";
       return row("assets:" + k, a.meta.name, weak ? (g ? g.html : "") : chip(a.ours.now.signal, "asset") + (g ? g.html : ""),
-        "", weak ? probLine(a) : dirProb(a) + " · " + hit(a.ours.score_recent || a.ours.score));
+        "", hit(a.ours.score_recent || a.ours.score));
     }).join("");
     // 3) 환율 6개월 전망
     var fxs = FX_PAIRS.filter(function (k) { return pro[k] && pro[k].ours; }).map(function (k) {
       var a = pro[k], g = sigGrade(a), weak = g && g.lv === "weak";
       return row("fxpro:" + k, a.meta.name, weak ? (g ? g.html : "") : chip(a.ours.now.signal, "asset") + (g ? g.html : ""),
-        "", weak ? probLine(a) : dirProb(a) + " · " + hit(a.ours.score_recent || a.ours.score));
+        "", hit(a.ours.score_recent || a.ours.score));
     }).join("");
     // 4) 비슷했던 과거
     var an = pro.analogs, anH = "";
@@ -1434,10 +1496,15 @@
             en: "Most hawkish " + hk.name + " (" + sg(hk.tone) + ")" + (ms.length > 1 ? " · most dovish " + dv.name + " (" + sg(dv.tone) + ")" : "") }));
     }
     var card = function (title, sub, body) { return body ? '<section class="card"><h2>' + t(title) + '</h2>' + (sub ? '<p class="sub">' + t(sub) + "</p>" : "") + '<div class="pa-list">' + body + "</div></section>" : ""; };
-    return card({ ko: "경제학자 신호", en: "Economist signals" }, { ko: "나라마다 유명 경제학자 금리 공식들을 합친 '우리 공식'이 지금 가리키는 방향입니다. 신뢰도는 최근 10년 적중률이 '항상 동결'처럼 단순한 방법보다 얼마나 나은지로 매깁니다.", en: "Where our blend of famous economists' rate formulas points now. Confidence = how much its last-10-year hit rate beats a naive call like 'always hold'." }, econ) +
-      card({ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, { ko: "'그대로 간 비율'은 과거에 지금과 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향이었던 비율입니다. '참고용' 신호는 한 방향 대신 과거 확률(상승·보합·하락)을 보여 줍니다.", en: "'Went that way' = share of past cases with today's signal that actually did that over six months. Weak signals show past odds (rise/flat/fall) instead of one call." }, assets) +
-      card({ ko: "환율 6개월 전망", en: "Currencies: six-month outlook" }, { ko: "'상승'은 각 통화쌍 숫자가 오른다는 뜻입니다 (예: 원/달러 상승 = 원화 약세).", en: "'Rise' means the quoted number goes up (e.g. USD/KRW up = weaker won)." }, fxs) +
+    return card({ ko: "경제학자 신호", en: "Economist signals" }, null, econ) +
+      card({ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, null, assets) +
+      card({ ko: "환율 6개월 전망", en: "Currencies: six-month outlook" }, null, fxs) +
       card({ ko: "미국 참고", en: "US extras" }, null, anH + mH) +
+      '<section class="card">' + detailsBlock({ ko: "이 화면 읽는 법", en: "How to read this screen" }, [
+        [{ ko: "경제학자 신호", en: "Economist signals" }, { ko: "나라마다 유명 경제학자 금리 공식들을 합친 '우리 공식'이 지금 가리키는 방향입니다. 신뢰도는 최근 10년 적중률이 '항상 동결'처럼 단순한 방법보다 얼마나 나은지로 매깁니다.", en: "Where our blend of famous economists' rate formulas points now. Confidence = how much its last-10-year hit rate beats a naive call like 'always hold'." }],
+        [{ ko: "자산 6개월 전망", en: "Assets: six-month outlook" }, { ko: "'그대로 간 비율'은 과거에 지금과 같은 신호가 나온 뒤 6개월 동안 실제로 그 방향이었던 비율입니다. '참고용' 신호는 한 방향 대신 과거 확률(상승·보합·하락)을 보여 줍니다.", en: "'Went that way' = share of past cases with today's signal that actually did that over six months. Weak signals show past odds (rise/flat/fall) instead of one call." }],
+        [{ ko: "환율 6개월 전망", en: "Currencies: six-month outlook" }, { ko: "'상승'은 각 통화쌍 숫자가 오른다는 뜻입니다 (예: 원/달러 상승 = 원화 약세).", en: "'Rise' means the quoted number goes up (e.g. USD/KRW up = weaker won)." }],
+        [{ ko: "적중률", en: "Hit rate" }, { ko: "각 줄의 적중률은 최근 10년 기준입니다. 줄을 누르면 공식별 성적과 자세한 전망이 나옵니다.", en: "Each row's hit rate covers the last 10 years. Tap a row for each formula's record and the full outlook." }]]) + "</section>" +
       "<footer><p>" + proDisc() + "</p><p>" + t(UI.disc1) + "</p></footer>";
   }
 
@@ -2815,6 +2882,8 @@
       body = f ? folderDetail(f) : proOverview();
     } else if (view.tab === "proall" && pro) {
       body = proAllView();
+    } else if (view.tab === "card") {
+      body = cardView();
     } else if (view.tab === "sethome") {
       body = homeEditView();
     } else if (view.tab === "setalert") {
@@ -3260,6 +3329,8 @@
     if (e.target.closest("[data-share]")) { shareSheet(); return; }
     if (e.target.closest("[data-push]")) { pushToggle(); return; }
     if (e.target.closest("[data-mail]")) { mailToggle(); return; }
+    var cdb0 = e.target.closest("[data-card]");
+    if (cdb0) { view.card = cdb0.dataset.card; view.tab = "card"; view.folder = null; render(); scrollTo(0, 0); return; }
     var nkb = e.target.closest("[data-nk]");
     if (nkb) {
       var nc = notifCfg(), ni = nc.kinds.indexOf(nkb.dataset.nk);
