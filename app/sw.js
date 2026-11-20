@@ -1,5 +1,5 @@
 // 오프라인에서도 마지막으로 본 화면이 열리도록: 같은 주소의 파일은 먼저 인터넷에서 받고, 실패하면 저장본을 쓴다.
-const CACHE = "fed-rate-v6";
+const CACHE = "fed-rate-v7";
 const SHELL = ["./", "index.html", "style.css", "i18n.js", "dashboard.js", "config.js", "vendor/html2canvas.min.js", "icons/192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {

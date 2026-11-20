@@ -149,6 +149,18 @@
   }
   /** 두 언어 텍스트. CSS가 현재 언어만 보여 준다 (언어 전환 시 다시 그릴 필요 없음). */
   // ---------- 언어: 한국어·영어는 문구에 직접, 중국어·스페인어는 영어 원문으로 사전(i18n.js)을 찾는다 ----------
+  // ---------- 화면 모드: 휴대폰 설정 따름 / 라이트 / 다크 (이 기기에 저장) ----------
+  var THEME_KEY = "fed-dash-theme";
+  var THEME_NAME = { system: { ko: "휴대폰 설정 따름", en: "Match device" }, light: { ko: "라이트 모드", en: "Light mode" }, dark: { ko: "다크 모드", en: "Dark mode" } };
+  function themePref() { var v = null; try { v = localStorage.getItem(THEME_KEY); } catch (e) {} return v === "light" || v === "dark" ? v : "system"; }
+  function themeApply(m) {
+    var el = document.documentElement;
+    if (m === "light" || m === "dark") el.setAttribute("data-theme", m); else el.removeAttribute("data-theme");
+    var dark = m === "dark" || (m === "system" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+    var mc = document.querySelector('meta[name="theme-color"]');  // 휴대폰 위쪽 상태 표시줄 색도 맞춘다
+    if (mc) mc.setAttribute("content", dark ? "#0a1526" : "#14284b");
+  }
+  themeApply(themePref());
   var LANGS = ["ko", "en", "zh", "ja", "es", "fr", "de", "nl"];
   var LANG_NAME = { ko: "한국어", en: "English", zh: "中文", ja: "日本語", es: "Español", fr: "Français", de: "Deutsch (German)", nl: "Nederlands (Dutch)" };
   function langsw() {  // 메뉴가 없는 화면(로그인·불러오는 중)에서 쓰는 언어 고르기 (8개 언어라 펼침 목록)
@@ -1110,6 +1122,14 @@
           return '<button type="button" class="mn-item mn-lang" data-lang="' + l + '" aria-pressed="' + (root.lang === l) + '" lang="' + l + '"><span class="mn-l"><span class="mn-nm">' + LANG_NAME[l] + "</span></span>" +
             '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
         }).join("") + "</div>" +
+          '<button type="button" class="mn-item mn-langtoggle" data-themetoggle aria-expanded="false" aria-controls="mn-themelist">' +
+          '<span class="mn-l"><span class="mn-nm">' + t({ ko: "화면 모드", en: "Appearance" }) + "</span></span>" +
+          '<span class="mn-r"><b class="mn-curlang">' + t(THEME_NAME[themePref()]) + '</b><span class="mn-chev mn-caret" aria-hidden="true">›</span></span></button>' +
+          '<div class="mn-langlist" id="mn-themelist" hidden>' +
+          ["system", "light", "dark"].map(function (m) {
+            return '<button type="button" class="mn-item mn-lang" data-themeset="' + m + '" aria-pressed="' + (themePref() === m) + '"><span class="mn-l"><span class="mn-nm">' + t(THEME_NAME[m]) + "</span></span>" +
+              '<span class="mn-r"><span class="mn-check" aria-hidden="true">✓</span></span></button>';
+          }).join("") + "</div>" +
           "</div>" +
         (auth.session ? '<div class="mn-group"><button type="button" class="mn-item mn-logout" data-auth="logout">' +
           '<span class="mn-l"><span class="mn-nm">' + t({ ko: "로그아웃", en: "Sign out" }) + '</span><span class="mn-sub">' + esc(auth.session.email || "") + "</span></span>" +
@@ -3209,6 +3229,18 @@
       var tc = homeCfg(), tk = ht.dataset.homeTg, ti = tc.hidden.indexOf(tk);
       if (ti >= 0) tc.hidden.splice(ti, 1); else tc.hidden.push(tk);
       homeSave(tc); render(); return;
+    }
+    var tht = e.target.closest("[data-themetoggle]");
+    if (tht) {
+      var tl = document.getElementById("mn-themelist"), op = tl.hidden;
+      tl.hidden = !op; tht.setAttribute("aria-expanded", String(op));
+      if (op) tl.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    var ths = e.target.closest("[data-themeset]");
+    if (ths) {
+      try { if (ths.dataset.themeset === "system") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, ths.dataset.themeset); } catch (err) {}
+      themeApply(ths.dataset.themeset); openMenu(false); render(); return;
     }
     var lt = e.target.closest("[data-langtoggle]");
     if (lt) {
