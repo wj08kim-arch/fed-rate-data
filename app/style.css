@@ -800,3 +800,18 @@ header .hdr-right { flex: none; margin-left: auto; }
 .ad-bar-t { height: 10px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .ad-bar-t i { display: block; height: 100%; background: var(--hold); border-radius: 4px; min-width: 2px; }
 .ad-bar b { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* 환율 폴더: 기준·상대 통화 고르기 */
+.fxsel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 10px; }
+.fxsel label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink-2); }
+.fxsel select { width: 100%; min-width: 0; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); background: var(--card);
+  border: 1px solid var(--base); border-radius: 12px; padding: 10px 12px; }
+.fxswap { appearance: none; width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--base); background: var(--card); color: var(--ink);
+  font-size: 18px; cursor: pointer; }
+.fxswap:focus-visible, .fxsel select:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.fx-quick { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.fx-quick .pairs { flex-wrap: wrap; }
+@media (max-width: 480px) {  /* 휴대폰: 두 통화를 위아래로, 바꾸기 버튼은 가운데 */
+  .fxsel { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .fxswap { justify-self: center; transform: rotate(90deg); width: 40px; height: 40px; }
+}

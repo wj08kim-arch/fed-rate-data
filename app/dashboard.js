@@ -1084,7 +1084,7 @@
           { ko: "회색 글씨: 다음 금리 결정일 · 남은 날", en: "Grey: next decision date · days left" }],
         [{ ko: "PRO 폴더", en: "PRO folders" }, proOn ? item("proall", { ko: "전체", en: "All PRO" }, "", true, { ko: "세 폴더의 지금 신호 한눈에", en: "Every PRO signal at a glance" }) + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
-          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") : ""]
+          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "20개 통화 · 기준 통화 고르기", en: "20 currencies, pick any base" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
       var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
@@ -1139,7 +1139,7 @@
           '<div class="mn-top"><b>PRO</b><button type="button" class="mn-x" data-menu-close aria-label="' + esc(tt({ ko: "닫기", en: "Close" })) + '">✕</button></div>' +
           '<div class="mn-group">' + item("proall", { ko: "PRO 전체", en: "All PRO" }, "", false, { ko: "세 폴더의 지금 신호 한눈에", en: "Every PRO signal at a glance" }) + item("pro", UI.tabPro, "", true, { ko: "경제학자 방식별 전망·성적", en: "Calls by economist method" }) +
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
-          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "원·엔·유로 등 환율", en: "Won, yen, euro and more" }) : "") + "</div></div></div>" : "");
+          ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "20개 통화 · 기준 통화 고르기", en: "20 currencies, pick any base" }) : "") + "</div></div></div>" : "");
     }
     return "<header><div class=\"brand\"><h1>" + t(UI.title) + "</h1>" +
       (data ? '<span class="meta">' + t(UI.asof, { d: data.meta.generated }) + (fromCache ? " · " + t(UI.offline) : "") + "</span>" : "") +
@@ -1230,7 +1230,7 @@
   function stLike(rg) { return !!rg && (rg.mode === "stance" || rg.mode === "asset"); }
   function regionOf(key) {
     if (!pro) return null;
-    var m = key && /^([a-z]{2})_/.exec(key);
+    var m = key && /^([a-z]{6}|[a-z]{2})_/.exec(key);  // 'kw_trend', 'eurkrw_trend'(20개 통화 조합)
     return m && FOLDER_REGIONS.indexOf(m[1]) >= 0 && pro[m[1]] ? pro[m[1]] : pro;
   }
   function findFolder(key) {
@@ -2278,10 +2278,58 @@
         '<span class="f-foot">' + chip(q.ours.now.signal, "asset") + '<span class="lab">' + t({ ko: "공식 " + q.folders.length + "개", en: q.folders.length + " formulas" }) + "</span></span></button>";
     }).join("")) + "</div>";
   }
+  // ---------- 환율 폴더: 20개 통화 중 아무 두 통화 (기준 통화 1단위 = ? 상대 통화) ----------
+  // 6개 대표 통화쌍은 pro.json 안에 있고, 나머지 조합은 고를 때 서버(pro/fx/<키>.json)에서 받는다
+  var fxc = { busy: {}, err: {} };
+  function fxCodes() {
+    return (pro && pro.fx_codes) || [{ code: "USD", ko: "미국 달러", en: "US dollar" }, { code: "KRW", ko: "한국 원", en: "Korean won" }];
+  }
+  function fxFlagKey(b, q) { var f = (pro && pro.fx_flag) || {}; for (var k in f) if (f[k] === b + "/" + q) return k; return null; }
+  function fxCur() {
+    if (!view.fxb || !view.fxq) {
+      var p0 = pro && pro[view.fxp || "kw"], pc = ((p0 && p0.pair) || "USD/KRW").split("/");
+      view.fxb = pc[0]; view.fxq = pc[1];
+    }
+    return { b: view.fxb, q: view.fxq };
+  }
+  function fxKey(c) { return fxFlagKey(c.b, c.q) || (c.b + c.q).toLowerCase(); }
+  function fxObj() { var c = fxCur(), k = fxKey(c); return pro && pro[k] ? pro[k] : null; }
+  function fxLoad() {
+    var c = fxCur(), k = fxKey(c);
+    if (!pro || pro[k] || fxc.busy[k] || fxc.err[k]) return;
+    fxc.busy[k] = true;
+    freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      return sbFetch("/storage/v1/object/authenticated/pro/fx/" + k + ".json?t=" + encodeURIComponent(pro.generated_at || ""), { token: tok });
+    }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (j) { pro[k] = j; if (FOLDER_REGIONS.indexOf(k) < 0) FOLDER_REGIONS.push(k); }, function () { fxc.err[k] = true; })
+      .then(function () { fxc.busy[k] = false; if (view.tab === "fxpro") render(); });
+  }
+  function fxName(x) { return { ko: x.ko, en: x.en }; }
   function pairSwitch() {
-    return '<div class="periods fx-base pairs" role="group" aria-label="Pair">' + FX_PAIRS.filter(function (k) { return pro && pro[k]; }).map(function (k) {
-      return '<button type="button" data-fxp="' + k + '" aria-pressed="' + ((view.fxp || "kw") === k) + '">' + t(pro[k].meta.name) + "</button>";
-    }).join("") + "</div>";
+    var c = fxCur(), codes = fxCodes();
+    var opts = function (sel) {
+      return codes.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + ">" + x.code + " · " + esc(tt(fxName(x))) + "</option>"; }).join("");
+    };
+    var quick = FX_PAIRS.filter(function (k) { return pro && pro[k]; }).map(function (k) {
+      var on = fxKey(c) === k;
+      return '<button type="button" data-fxp="' + k + '" aria-pressed="' + on + '">' + t(pro[k].meta.name) + "</button>";
+    }).join("");
+    return '<section class="card fxpick"><h2>' + t({ ko: "통화 고르기", en: "Choose currencies" }) + '</h2><p class="sub">' +
+      t({ ko: "기준 통화 1단위가 상대 통화로 얼마인지 봅니다. 세계에서 가장 많이 거래되는 20개 통화 중에서 고르세요.", en: "See what one unit of the base currency is worth in the other. Pick from the world's 20 most traded currencies." }) + "</p>" +
+      '<div class="fxsel"><label><span>' + t({ ko: "기준 통화", en: "Base currency" }) + '</span><select data-fxsel="b">' + opts(c.b) + "</select></label>" +
+      '<button type="button" class="fxswap" data-fxswap aria-label="' + esc(tt({ ko: "두 통화 바꾸기", en: "Swap currencies" })) + '">⇄</button>' +
+      "<label><span>" + t({ ko: "상대 통화", en: "Quote currency" }) + '</span><select data-fxsel="q">' + opts(c.q) + "</select></label></div>" +
+      '<div class="fx-quick"><span class="lab">' + t({ ko: "자주 보는 통화쌍", en: "Popular pairs" }) + '</span><div class="periods fx-base pairs" role="group" aria-label="Pair">' + quick + "</div></div></section>";
+  }
+  function fxWaitView() {
+    var c = fxCur(), k = fxKey(c);
+    fxLoad();
+    var msg = c.b === c.q ? { ko: "서로 다른 두 통화를 골라 주세요.", en: "Pick two different currencies." }
+      : fxc.err[k] ? { ko: "이 통화쌍 자료를 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.", en: "Couldn't load this pair. Try again shortly." }
+      : { ko: "불러오는 중…", en: "Loading…" };
+    return authBar() + pairSwitch() + '<section class="card"><p class="sub">' + t(msg) + "</p>" +
+      (fxc.err[k] && c.b !== c.q ? '<div class="btn-row"><button type="button" class="refresh" data-fxretry>' + t({ ko: "다시 시도", en: "Try again" }) + "</button></div>" : "") + "</section>";
   }
   function assetOverview(p) {
     var me = p.meta, s = p.stats, o = p.outlook, lr = p.longrun, n = p.folders.length;
@@ -2756,9 +2804,9 @@
       body = lockedView();
     } else if ((view.tab === "assets" || view.tab === "pro" || view.tab === "fxpro" || view.tab === "proall") && !pro && serverOn()) {
       body = loginView();
-    } else if (view.tab === "fxpro" && pro && pro[view.fxp || "kw"]) {
-      var ff = view.folder && findFolder(view.folder);
-      body = ff ? folderDetail(ff) : assetOverview(pro[view.fxp || "kw"]);
+    } else if (view.tab === "fxpro" && pro) {
+      var ff = view.folder && findFolder(view.folder), fo = fxObj();
+      body = ff ? folderDetail(ff) : fo ? assetOverview(fo) : fxWaitView();
     } else if (view.tab === "assets" && pro && pro[view.asset]) {
       var fa = view.folder && findFolder(view.folder);
       body = fa ? folderDetail(fa) : assetOverview(pro[view.asset]);
@@ -2964,7 +3012,7 @@
     return '<section class="card"><h2>' + t(asset ? UI.tabAssets : fxt ? UI.tabFx : UI.tabPro) + ' <span class="pro-badge">PRO</span></h2>' +
       '<p class="lead-p">' + t({ ko: "PRO는 앱에서 로그인한 회원만 볼 수 있습니다.", en: "PRO is available to signed-in members in the app." }) + "</p>" +
       '<ul class="plain">' + (fxt
-        ? "<li>" + t({ ko: "원/달러·유로/달러·엔/달러 등 6개 통화쌍의 통계와 확대 그래프", en: "Statistics and zoomable charts for six pairs including USD/KRW, EUR/USD and USD/JPY" }) + "</li>" +
+        ? "<li>" + t({ ko: "세계에서 가장 많이 거래되는 20개 통화를 원하는 기준 통화로 — 통계와 확대 그래프", en: "The world's 20 most traded currencies against any base you choose, with statistics and zoomable charts" }) + "</li>" +
           "<li>" + t({ ko: "추세·금리차·구매력평가 공식의 과거 적중률과 6개월 전망, 시장 내재 선물환", en: "Track records of trend, rate-gap and PPP signals, a six-month outlook and market-implied forwards" }) + "</li>" +
           "<li>" + t({ ko: "투자은행 전망과 중앙은행·재무부 발언 요약 (출처 링크)", en: "Bank forecasts and summarized central-bank and finance-ministry remarks (with sources)" }) + "</li>"
         : asset
@@ -3075,6 +3123,13 @@
   }
   app.addEventListener("input", onCalcInput);
   app.addEventListener("change", onCalcInput);
+  app.addEventListener("change", function (e) {  // 환율 폴더: 기준·상대 통화 고르기 (같은 통화를 고르면 서로 맞바꾼다)
+    var sel = e.target.closest && e.target.closest("[data-fxsel]");
+    if (!sel) return;
+    var cur = fxCur(), side = sel.dataset.fxsel, v = sel.value;
+    if (side === "b") { if (v === cur.q) view.fxq = cur.b; view.fxb = v; } else { if (v === cur.b) view.fxb = cur.q; view.fxq = v; }
+    view.folder = null; render();
+  });
   // ---------- 좌우로 밀어서 화면 넘기기 ----------
   // 같은 묶음 안에서 이동: 세 '전체' 화면 · 나라별 금리(미국 연준·각국, 메뉴 순서) · PRO(전체·경제학자·자산·환율) · 홈(전체·계산기)
   function swipeSeq() {
@@ -3255,7 +3310,7 @@
     if (gob) {  // PRO 전체의 줄: "탭:세부" (pro:kr, assets:au, fxpro:kw)
       var gp = gob.dataset.go.split(":");
       view.tab = gp[0]; view.folder = null;
-      if (gp[0] === "pro") view.region = gp[1]; else if (gp[0] === "assets") view.asset = gp[1]; else if (gp[0] === "fxpro") view.fxp = gp[1];
+      if (gp[0] === "pro") view.region = gp[1]; else if (gp[0] === "assets") view.asset = gp[1]; else if (gp[0] === "fxpro") { view.fxp = gp[1]; var gpc = ((pro && pro[gp[1]] && pro[gp[1]].pair) || "USD/KRW").split("/"); view.fxb = gpc[0]; view.fxq = gpc[1]; }
       render(); scrollTo(0, 0); return;
     }
     if (e.target.closest("[data-menu-close]") || e.target.classList.contains("mn-sheet")) { openMenu(false); return; }
@@ -3299,7 +3354,13 @@
     var fp0 = e.target.closest("[data-fxpick]");
     if (fp0) { view.fxPick = fp0.dataset.fxpick; render(); return; }
     var fpb = e.target.closest("[data-fxp]");
-    if (fpb) { view.fxp = fpb.dataset.fxp; view.folder = null; render(); return; }
+    if (fpb) {
+      view.fxp = fpb.dataset.fxp; view.folder = null;
+      var fpc = ((pro && pro[view.fxp] && pro[view.fxp].pair) || "USD/KRW").split("/"); view.fxb = fpc[0]; view.fxq = fpc[1];
+      render(); return;
+    }
+    if (e.target.closest("[data-fxswap]")) { var sw0 = fxCur(); view.fxb = sw0.q; view.fxq = sw0.b; view.folder = null; render(); return; }
+    if (e.target.closest("[data-fxretry]")) { fxc.err[fxKey(fxCur())] = false; render(); return; }
     var ab = e.target.closest("[data-asset].folder");
     if (ab) { view.asset = ab.dataset.asset; view.folder = null; render(); return; }
     var bigb = e.target.closest("[data-pxbig]");
