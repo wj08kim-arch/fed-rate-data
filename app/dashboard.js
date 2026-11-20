@@ -1509,7 +1509,7 @@
       return '<button type="button" data-years="' + y + '" aria-pressed="' + (!opts.win && (opts.years || 0) === y) + '">' +
         t(y ? { ko: "최근 " + y + "년", en: "Last " + y + "y" } : { ko: "전체", en: "All" }) + "</button>";
     }).join("") + "</div>";
-    return '<div class="chart' + (opts.big ? " big" : "") + '" data-chart="' + esc(JSON.stringify(c)) + '">' +
+    return '<div class="chart two' + (opts.big ? " big" : "") + '" data-chart="' + esc(JSON.stringify(c)) + '">' +
       '<div class="chart-top"><div class="legend"><span><i class="lk actual"></i>' + t(aName) + "</span><span><i class=\"lk rule\"></i>" + t(f.name) + "</span></div>" + expand + "</div>" +
       periods +
       '<div class="readout" aria-live="polite"></div>' +

@@ -5,6 +5,7 @@
   --page: #f4f6fa; --card: #ffffff; --ink: #0f1d33; --ink-2: #4a5568; --muted: #7b8597;
   --line: #e3e7ee; --base: #c9d0dc; --accent: #14284b; --dot-ring: #ffffff;
   --cut: #86b6ef; --hold: #2a78d6; --hike: #14284b;
+  --ln-a: #2a78d6; --ln-b: #c96f1f;  /* 두 줄 차트: 실제(파랑)·비교(주황 점선) — 색약에서도 구분 */
   --hero-bg: #14284b; --hero-ink: #ffffff; --hero-ink-2: #c7d3e8;
 }
 @media (prefers-color-scheme: dark) {
@@ -13,6 +14,7 @@
     --page: #0a1526; --card: #0f1d33; --ink: #f2f5fa; --ink-2: #c3ccda; --muted: #8b96a8;
     --line: #1f2f49; --base: #2c3e5c; --accent: #eef3fb; --dot-ring: #0f1d33;
     --cut: #2a78d6; --hold: #86b6ef; --hike: #eef3fb;
+    --ln-a: #86b6ef; --ln-b: #f0a35e;
     --hero-bg: #13243f; --hero-ink: #ffffff; --hero-ink-2: #aebbd0;
   }
 }
@@ -21,6 +23,7 @@
   --page: #0a1526; --card: #0f1d33; --ink: #f2f5fa; --ink-2: #c3ccda; --muted: #8b96a8;
   --line: #1f2f49; --base: #2c3e5c; --accent: #eef3fb; --dot-ring: #0f1d33;
   --cut: #2a78d6; --hold: #86b6ef; --hike: #eef3fb;
+  --ln-a: #86b6ef; --ln-b: #f0a35e;
   --hero-bg: #13243f; --hero-ink: #ffffff; --hero-ink-2: #aebbd0;
 }
 * { box-sizing: border-box; }
@@ -271,6 +274,13 @@ code.formula { display: inline-block; font: 12.5px ui-monospace, SFMono-Regular,
 .chart .d-actual, .chart .d-rule { stroke: var(--card); stroke-width: 2; pointer-events: none; }
 .chart .d-actual { fill: var(--muted); }
 .chart .d-rule { fill: var(--accent); }
+/* 선이 두 개인 차트(실제 vs 공식·미국 금리): 파랑 실선 vs 주황 점선 */
+.chart.two .l-actual { stroke: var(--ln-a); }
+.chart.two .l-rule { stroke: var(--ln-b); stroke-dasharray: 6 4; }
+.chart.two .d-actual { fill: var(--ln-a); }
+.chart.two .d-rule { fill: var(--ln-b); }
+.chart.two .lk.actual { background: var(--ln-a); height: 3px; }
+.chart.two .lk.rule { background: none; height: 0; border-top: 3px dashed var(--ln-b); }
 .chart .xh { pointer-events: none; }
 .chart-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .chart-top .legend { margin-bottom: 0; }
@@ -333,6 +343,7 @@ html.zoom-open, html.zoom-open body { overflow: hidden; }
     --page: #ffffff; --card: #ffffff; --ink: #0f1d33; --ink-2: #4a5568; --muted: #6b7587;
     --line: #e3e7ee; --base: #c9d0dc; --accent: #14284b; --dot-ring: #ffffff;
     --cut: #86b6ef; --hold: #2a78d6; --hike: #14284b;
+    --ln-a: #2a78d6; --ln-b: #c96f1f;
     --hero-bg: #14284b; --hero-ink: #ffffff; --hero-ink-2: #c7d3e8;
   }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
