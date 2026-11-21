@@ -1277,6 +1277,15 @@
     }
     return out;
   }
+  // 서버가 데이터를 만든 시각을 이 기기의 시간대로: "11/21 07:05"
+  function updTime() {
+    var u = data && data.meta && data.meta.updated_at;
+    if (!u) return "";
+    var d = new Date(u);
+    if (isNaN(d)) return "";
+    var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  }
   function header(canRefresh) {
     // 메뉴(☰): 누르면 화면 전체에 모든 화면 목록이 뜨고, 고르면 그 화면으로 간다 (토스뱅크식)
     var cl = countryList(), proOn = pro || serverOn() || proLocked();
@@ -1358,7 +1367,7 @@
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "20개 통화 · 기준 통화 고르기", en: "20 currencies, pick any base" }) : "") + "</div></div></div>" : "");
     }
     return "<header><div class=\"brand\"><h1>" + t(UI.title) + "</h1>" +
-      (data ? '<span class="meta">' + t(UI.asof, { d: data.meta.generated }) + (fromCache ? " · " + t(UI.offline) : "") + "</span>" : "") +
+      (data ? '<span class="meta">' + (updTime() ? t({ ko: "{d} 갱신", en: "Updated {d}" }, { d: updTime() }) : t(UI.asof, { d: data.meta.generated })) + (fromCache ? " · " + t(UI.offline) : "") + "</span>" : "") +
       '</div><div class="hdr-right">' +
       (canRefresh ? '<button type="button" class="refresh" data-refresh>' + t(UI.refresh) + "</button>" : "") +
       (tabs ? "" : langsw()) + "</div></header>" + tabs;
@@ -3167,7 +3176,7 @@
     });
   }
   // ---------- 관리자 화면 (supabase/admin.sql) ----------
-  var admin = { rows: null, q: "", busy: false, msg: null, stats: null };
+  var admin = { rows: null, q: "", busy: false, msg: null, stats: null, ops: null };
   function adminRpc(name, body) {
     return freshToken().then(function (tok) {
       if (!tok) throw new Error("signed out");
@@ -3178,6 +3187,7 @@
   }
   function adminLoad() {
     admin.busy = true; admin.msg = null; render();
+    adminRpc("admin_ops_log", { n: 30 }).then(function (rows) { admin.ops = rows || []; render(); }, function () { admin.ops = false; render(); });
     adminRpc("admin_stats", {}).then(function (st) { admin.stats = st || null; render(); },
       function () { admin.stats = false; render(); });  // supabase/prefs.sql 을 아직 안 돌렸으면 통계 칸에 안내
     adminRpc("admin_list_members", { q: admin.q || null }).then(function (rows) { admin.rows = rows || []; admin.busy = false; render(); },
@@ -3197,7 +3207,7 @@
             '<button type="button" class="tgl" aria-pressed="true" data-admin-on="' + esc(u.user_id) + '">' + t({ ko: "PRO 켜기", en: "Turn on PRO" }) + "</button>") + "</div></li>";
     }).join("");
     var pros = (admin.rows || []).filter(function (u) { return u.is_pro; }).length;
-    return adminStatsView() + '<section class="card"><h2>' + t({ ko: "회원 관리", en: "Members" }) + "</h2>" +
+    return adminStatsView() + adminOpsView() + '<section class="card"><h2>' + t({ ko: "회원 관리", en: "Members" }) + "</h2>" +
       '<p class="sub">' + t({ ko: "이메일 일부로 검색하고, PRO를 켜거나 끕니다. 켤 때 날짜를 고르면 그날까지만 PRO가 열리고, 비워 두면 기한이 없습니다.", en: "Search by part of an email and turn PRO on or off. Pick a date to make PRO expire then; leave it blank for no end date." }) + "</p>" +
       '<form class="ad-search" data-adminform><input type="search" name="q" value="' + esc(admin.q) + '" placeholder="' + esc(tt({ ko: "이메일 검색", en: "Search email" })) + '">' +
       '<button type="submit" class="refresh">' + t({ ko: "검색", en: "Search" }) + "</button></form>" +
@@ -3205,6 +3215,29 @@
       (admin.msg ? '<p class="note warn">' + t(admin.msg) + "</p>" : "") +
       (admin.rows ? '<p class="note">' + t({ ko: admin.rows.length + "명 (PRO " + pros + "명)" + (admin.rows.length >= 200 ? " · 최근 200명까지 표시" : ""), en: admin.rows.length + " members (" + pros + " PRO)" + (admin.rows.length >= 200 ? " · showing the latest 200" : "") }) + "</p>" : "") +
       '<ul class="ad-list">' + rows + "</ul></section>";
+  }
+  function adminOpsView() {  // 운영 기록 (supabase/ops.sql · fed_model/ops_log.py)
+    var ops = admin.ops;
+    var head = '<section class="card"><h2>' + t({ ko: "운영 기록", en: "Operations log" }) + '</h2><p class="sub">' +
+      t({ ko: "서버 작업이 끝날 때마다 남는 기록입니다. 매일 업데이트(한국 시간 아침 7시)와 PRO 업데이트(3시간마다)의 성공·실패와, 받지 못한 자료를 보여 줍니다.",
+          en: "One entry per server run: the daily update (7am KST) and the PRO update (every three hours), with success or failure and any data that couldn't be fetched." }) + "</p>";
+    if (ops === false) return head + '<p class="note">' + t({ ko: "운영 기록을 보려면 Supabase에서 supabase/ops.sql 을 한 번 실행하세요.", en: "Run supabase/ops.sql in Supabase once to see the log." }) + "</p></section>";
+    if (!ops) return head + '<p class="note">' + t({ ko: "불러오는 중…", en: "Loading…" }) + "</p></section>";
+    if (!ops.length) return head + '<p class="note">' + t({ ko: "아직 기록이 없습니다. 다음 서버 작업부터 쌓입니다.", en: "No entries yet. They start with the next server run." }) + "</p></section>";
+    var JOB = { daily: { ko: "매일 업데이트", en: "Daily update" }, pro: { ko: "PRO 업데이트", en: "PRO update" } };
+    var ST = { success: { ko: "정상", en: "OK" }, warning: { ko: "일부 실패", en: "Partial" }, failure: { ko: "실패", en: "Failed" }, cancelled: { ko: "취소", en: "Cancelled" } };
+    var when = function (x) { var d = new Date(x); if (isNaN(d)) return esc(x); var p2 = function (n) { return (n < 10 ? "0" : "") + n; }; return (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()); };
+    var bad = ops.filter(function (o) { return o.status !== "success"; }).length;
+    var rows = ops.map(function (o) {
+      var w = o.warnings || [];
+      return '<li class="op-row op-' + esc(o.status) + '"><div class="op-top"><span class="op-st">' + t(ST[o.status] || { ko: o.status, en: o.status }) + "</span>" +
+        "<b>" + t(JOB[o.job] || { ko: o.job, en: o.job }) + '</b><span class="lab">' + when(o.created_at) + "</span>" +
+        (o.run_url ? '<a class="lab" href="' + esc(o.run_url) + '" target="_blank" rel="noopener">' + t({ ko: "실행 기록", en: "Run" }) + " ›</a>" : "") + "</div>" +
+        (w.length ? '<details class="op-w"><summary>' + t({ ko: "경고 " + w.length + "줄", en: w.length + " warnings" }) + '</summary><ul lang="en">' +
+          w.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></details>" : "") + "</li>";
+    }).join("");
+    return head + '<p class="mini-line">' + t({ ko: "최근 " + ops.length + "번 중 문제 " + bad + "번", en: bad + " of the last " + ops.length + " runs had problems" }) + "</p>" +
+      '<ul class="op-list">' + rows + "</ul></section>";
   }
   function adminStatsView() {
     var st = admin.stats;
