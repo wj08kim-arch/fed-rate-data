@@ -580,6 +580,32 @@
       '<p class="note">' + t({ ko: "일정 출처: 미국 노동통계국(CPI·고용), 경제분석국(PCE, 12월분 이후는 아직 미공지). 시장 예상치는 유료 자료라 넣지 않았습니다.",
         en: "Schedules: BLS (CPI, jobs) and BEA (PCE; later dates not yet announced). Market consensus is paid data, so it isn't shown." }) + "</p></section>";
   }
+  // FOMC 성명서: 최근 성명서와 바로 전 성명서 비교 (원문 영어, 바뀐 말만 표시)
+  function fomcWords(ws) {
+    return ws.map(function (w) {
+      return w[0] === "=" ? esc(w[1]) : w[0] === "-" ? '<del class="sd-del">' + esc(w[1]) + "</del>" : '<ins class="sd-add">' + esc(w[1]) + "</ins>";
+    }).join(" ");
+  }
+  function fomcDiffSection() {
+    var d = data.fomc_diff;
+    if (!d || !d.items) return "";
+    var row = function (x) {
+      if (x.op === "chg") return '<li class="sd-chg"><span class="sd-tag">' + t({ ko: "수정", en: "Changed" }) + "</span><p>" + fomcWords(x.words) + "</p></li>";
+      if (x.op === "add") return '<li class="sd-new"><span class="sd-tag">' + t({ ko: "추가", en: "Added" }) + '</span><p><ins class="sd-add">' + esc(x.text) + "</ins></p></li>";
+      if (x.op === "del") return '<li class="sd-gone"><span class="sd-tag">' + t({ ko: "삭제", en: "Removed" }) + '</span><p><del class="sd-del">' + esc(x.text) + "</del></p></li>";
+      return '<li class="sd-same"><p>' + esc(x.text) + "</p></li>";
+    };
+    var changed = d.items.filter(function (x) { return x.op !== "same"; });
+    return '<section class="card"><div class="eyebrow">' + t({ ko: "FOMC 성명서", en: "FOMC statement" }) + " · " + mdS(d.date) + " vs " + mdS(d.prev_date) + "</div>" +
+      "<h2>" + t({ ko: "연준 성명서에서 바뀐 문장", en: "What changed in the Fed statement" }) + "</h2>" +
+      '<p class="sub">' + t({ ko: "가장 최근 성명서를 바로 전 성명서와 비교했습니다. 줄 그은 말은 빠진 말, 파란 바탕은 새로 들어간 말입니다. 성명서는 영어 원문 그대로 보여 줍니다.",
+        en: "The latest statement compared with the one before. Struck-through words were removed; words on a blue background are new. The statement is shown in the original English." }) + "</p>" +
+      '<p class="mini-line">' + t({ ko: "수정 " + d.n_chg + " · 추가 " + d.n_add + " · 삭제 " + d.n_del, en: d.n_chg + " changed · " + d.n_add + " added · " + d.n_del + " removed" }) + "</p>" +
+      (changed.length ? '<ul class="sd-list" lang="en">' + changed.map(row).join("") + "</ul>" : '<p class="note">' + t({ ko: "바뀐 문장이 없습니다.", en: "No sentences changed." }) + "</p>") +
+      '<details class="about"><summary><span>' + t({ ko: "성명서 전체 보기", en: "Show the full statement" }) + '</span></summary><ul class="sd-list" lang="en">' + d.items.map(row).join("") + "</ul></details>" +
+      '<p class="note"><a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + t({ ko: "최근 성명서 원문", en: "Latest statement" }) + "</a> · " +
+      '<a href="' + esc(d.prev_url) + '" target="_blank" rel="noopener">' + t({ ko: "전 성명서 원문", en: "Previous statement" }) + "</a> · " + t({ ko: "출처: 미국 연방준비제도", en: "Source: Federal Reserve" }) + "</p></section>";
+  }
   function recordHtml(r) {
     if (!r) return "";
     var SIGT = function (v) { return v == null ? "–" : chip(v, false); };
@@ -729,6 +755,123 @@
       .then(function () { mail.busy = false; render(); });
   }
   function mailSync() { if (mail.on) mailSave(true).catch(function () {}); }  // 언어를 바꾸면 이메일 언어도 맞춘다
+  // ---------- 계정: 로그인 정보 · 회원 탈퇴 (supabase/account.sql 의 delete_my_account) ----------
+  var del = { ok: false, busy: false, msg: null };
+  function accountView() {
+    if (!auth.session) return '<section class="card"><p class="sub">' + t({ ko: "로그인하면 볼 수 있습니다.", en: "Sign in to see this." }) + "</p></section>";
+    return '<section class="card"><h2>' + t({ ko: "로그인 정보", en: "Sign-in details" }) + '</h2><p class="mini-line"><b>' + esc(auth.session.email || "") + "</b></p>" +
+      '<p class="note">' + t(auth.member ? { ko: "PRO 회원", en: "PRO member" } : { ko: "무료 회원", en: "Free member" }) + "</p>" +
+      '<div class="btn-row"><button type="button" class="refresh" data-auth="logout">' + t({ ko: "로그아웃", en: "Sign out" }) + "</button></div></section>" +
+      '<section class="card danger"><h2>' + t({ ko: "회원 탈퇴", en: "Delete account" }) + '</h2><p class="sub">' +
+      t({ ko: "탈퇴하면 계정과 함께 휴대폰 알림 설정, 목표가 알림, 주간 이메일 설정, PRO 이용 권한이 모두 바로 삭제되고 되돌릴 수 없습니다. 같은 이메일로 다시 가입할 수는 있습니다.",
+          en: "Deleting your account immediately removes it along with your phone alerts, target-price alerts, weekly email setting and PRO access. This can't be undone. You can sign up again with the same email." }) + "</p>" +
+      '<label class="del-ok"><input type="checkbox" data-delok' + (del.ok ? " checked" : "") + "> <span>" + t({ ko: "모든 정보가 삭제되는 것을 이해했습니다.", en: "I understand everything will be deleted." }) + "</span></label>" +
+      (del.msg ? '<p class="note warn">' + t(del.msg) + "</p>" : "") +
+      '<div class="btn-row"><button type="button" class="refresh del-go" data-delgo' + (del.ok && !del.busy ? "" : " disabled") + ">" +
+      t(del.busy ? { ko: "삭제하는 중…", en: "Deleting…" } : { ko: "탈퇴하기", en: "Delete my account" }) + "</button></div></section>";
+  }
+  function deleteAccount() {
+    if (del.busy || !del.ok) return;
+    del.busy = true; del.msg = null; render();
+    var unsub = (pwa.on && "serviceWorker" in navigator) ? navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+      .then(function (sb) { return sb && sb.unsubscribe(); }).catch(function () {}) : Promise.resolve();
+    freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      return sbFetch("/rest/v1/rpc/delete_my_account", { method: "POST", token: tok, body: {} });
+    }).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return unsub;
+    }).then(function () {
+      try { localStorage.removeItem(NOTIF_KEY); } catch (e) {}
+      saveSession(null); pro = null; auth.member = null; auth.admin = false; push.on = false; mail.on = null;
+      del.busy = false; del.ok = false; view.tab = "all";
+      auth.step = "signin"; auth.msgOk = true; auth.msg = { ko: "탈퇴가 끝났습니다. 그동안 이용해 주셔서 감사합니다.", en: "Your account has been deleted. Thank you for using the app." };
+      render(); scrollTo(0, 0);
+    }, function () {
+      del.busy = false; del.msg = { ko: "탈퇴하지 못했습니다. 잠시 뒤 다시 시도하거나 관리자에게 알려 주세요.", en: "Couldn't delete the account. Try again shortly or contact the admin." }; render();
+    });
+  }
+  // ---------- 목표가 알림 (supabase/account.sql 의 price_alerts · fed_model/push_send.py 가 확인해 휴대폰 알림) ----------
+  var ALERT_ITEMS = [
+    { k: "fx:USD/KRW", n: { ko: "원/달러 (USD/KRW)", en: "USD/KRW" } }, { k: "fx:EUR/KRW", n: { ko: "원/유로 (EUR/KRW)", en: "EUR/KRW" } },
+    { k: "fx:JPY/KRW@100", n: { ko: "원/100엔 (JPY/KRW)", en: "100 JPY/KRW" } }, { k: "fx:CNY/KRW", n: { ko: "원/위안 (CNY/KRW)", en: "CNY/KRW" } },
+    { k: "fx:EUR/USD", n: { ko: "유로/달러 (EUR/USD)", en: "EUR/USD" } }, { k: "fx:USD/JPY", n: { ko: "엔/달러 (USD/JPY)", en: "USD/JPY" } },
+    { k: "fx:GBP/USD", n: { ko: "파운드/달러 (GBP/USD)", en: "GBP/USD" } }, { k: "fx:USD/CNY", n: { ko: "위안/달러 (USD/CNY)", en: "USD/CNY" } },
+    { k: "fx:USD/CHF", n: { ko: "프랑/달러 (USD/CHF)", en: "USD/CHF" } },
+    { k: "au", n: { ko: "금 ($/온스)", en: "Gold ($/oz)" }, pro: true }, { k: "ol", n: { ko: "유가 브렌트 ($/배럴)", en: "Oil, Brent ($/bbl)" }, pro: true },
+    { k: "sp", n: { ko: "S&P 500", en: "S&P 500" }, pro: true }
+  ];
+  var alerts = { rows: null, busy: false, msg: null, loading: false, item: "fx:USD/KRW", op: "below", target: "" };
+  function alertItem(k) { return ALERT_ITEMS.filter(function (x) { return x.k === k; })[0]; }
+  function alertNow(k) {  // 지금 값 (환율은 공개 데이터의 마지막 날, 금·유가·S&P는 PRO 데이터)
+    if (k.indexOf("fx:") === 0) {
+      var m = /^fx:([A-Z]{3})\/([A-Z]{3})(?:@(\d+))?$/.exec(k), f = data && data.fx;
+      if (!m || !f) return null;
+      var dl = fxSeries(f.daily, m[2], m[1]);  // 기준 m[2] 로 본 m[1] 1단위의 값
+      return dl.length ? dl[dl.length - 1][1] * (m[3] ? +m[3] : 1) : null;
+    }
+    return pro && pro[k] ? pro[k].ref_price : null;
+  }
+  function alertDigits(v) { return v == null ? 2 : v >= 100 ? 2 : v >= 1 ? 4 : 5; }
+  function alertsLoad() {
+    if (alerts.loading || alerts.rows !== null || !auth.session) return;
+    alerts.loading = true;
+    freshToken().then(function (tok) {
+      if (!tok) return;
+      return sbFetch("/rest/v1/price_alerts?select=id,item,op,target,fired_at,fired_value&order=created_at.desc", { token: tok }).then(function (r) {
+        if (!r.ok) { alerts.rows = []; if (r.status === 404) alerts.msg = { ko: "서버 설정이 아직 끝나지 않았습니다 (관리자: supabase/account.sql).", en: "Server setup isn't finished yet (admin: supabase/account.sql)." }; return; }
+        return r.json().then(function (rows) { alerts.rows = rows || []; });
+      });
+    }).catch(function () { alerts.rows = []; }).then(function () { alerts.loading = false; if (view.tab === "setalert") render(); });
+  }
+  function alertsCall(path, opts) {
+    alerts.busy = true; alerts.msg = null; render();
+    return freshToken().then(function (tok) {
+      if (!tok) throw new Error("signed out");
+      opts.token = tok;
+      return sbFetch(path, opts);
+    }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); alerts.rows = null; },
+      function () { alerts.msg = { ko: "저장하지 못했습니다. 잠시 뒤 다시 시도하세요.", en: "Couldn't save. Try again shortly." }; })
+      .then(function () { alerts.busy = false; alertsLoad(); render(); });
+  }
+  function alertAdd() {
+    var v = parseFloat(String(alerts.target).replace(/,/g, ""));
+    if (!(v > 0)) { alerts.msg = { ko: "목표 값을 숫자로 넣어 주세요.", en: "Enter a target number." }; render(); return; }
+    if ((alerts.rows || []).length >= 10) { alerts.msg = { ko: "목표가 알림은 10개까지 만들 수 있습니다.", en: "You can have up to 10 alerts." }; render(); return; }
+    freshToken().then(function (tok) {
+      alertsCall("/rest/v1/price_alerts", { method: "POST", body: { user_id: jwtSub(tok), item: alerts.item, op: alerts.op, target: v } });
+      alerts.target = "";
+    });
+  }
+  function alertsBox() {
+    if (!serverOn() || !auth.session) return "";
+    alertsLoad();
+    var it = alertItem(alerts.item) || ALERT_ITEMS[0], now = alertNow(it.k);
+    var opts = ALERT_ITEMS.filter(function (x) { return !x.pro || pro; }).map(function (x) {
+      return '<option value="' + x.k + '"' + (x.k === it.k ? " selected" : "") + ">" + esc(tt(x.n)) + "</option>";
+    }).join("");
+    var rows = (alerts.rows || []).map(function (a) {
+      var ai = alertItem(a.item), nv = alertNow(a.item), dg = alertDigits(+a.target);
+      var cond = t(a.op === "above" ? { ko: num(+a.target, dg) + " 이상이 되면", en: "at or above " + num(+a.target, dg) } : { ko: num(+a.target, dg) + " 이하가 되면", en: "at or below " + num(+a.target, dg) });
+      return '<li class="he-row' + (a.fired_at ? " off" : "") + '"><span class="he-nm">' + t(ai ? ai.n : { ko: a.item, en: a.item }) + '<br><span class="lab">' + cond +
+        (a.fired_at ? " · " + t({ ko: "도달 ", en: "reached " }) + mdS(a.fired_at.slice(0, 10)) + (a.fired_value != null ? " (" + num(+a.fired_value, dg) + ")" : "")
+                    : nv != null ? " · " + t({ ko: "지금 ", en: "now " }) + num(nv, alertDigits(nv)) : "") + "</span></span>" +
+        '<span class="he-ctl">' + (a.fired_at ? '<button type="button" class="tgl" data-alrearm="' + a.id + '">' + t({ ko: "다시 켜기", en: "Re-arm" }) + "</button>" : "") +
+        '<button type="button" class="tgl" data-aldel="' + a.id + '" aria-label="' + esc(tt({ ko: "삭제", en: "Delete" })) + '">✕</button></span></li>';
+    }).join("");
+    return '<section class="card"><h2>' + t({ ko: "목표가 알림", en: "Target-price alerts" }) + '</h2><p class="sub">' +
+      t({ ko: "정한 값에 닿으면 휴대폰 알림을 한 번 보내 드립니다. 환율은 하루 한 번(아침 업데이트), 금·유가·S&P 500은 3시간마다 확인합니다. 휴대폰 알림을 켠 기기로 갑니다.",
+          en: "We send one phone notification when the value is reached. Currencies are checked once a day (morning update); gold, oil and the S&P 500 every three hours. Alerts go to devices with phone notifications on." }) + "</p>" +
+      '<div class="al-form"><label><span>' + t({ ko: "항목", en: "Item" }) + '</span><select data-alitem>' + opts + "</select></label>" +
+      "<label><span>" + t({ ko: "조건", en: "When" }) + '</span><select data-alop><option value="below"' + (alerts.op === "below" ? " selected" : "") + ">" + esc(tt({ ko: "이하가 되면", en: "Falls to or below" })) + "</option>" +
+      '<option value="above"' + (alerts.op === "above" ? " selected" : "") + ">" + esc(tt({ ko: "이상이 되면", en: "Rises to or above" })) + "</option></select></label>" +
+      "<label><span>" + t({ ko: "목표 값", en: "Target" }) + (now != null ? ' <span class="lab">· ' + t({ ko: "지금 ", en: "now " }) + num(now, alertDigits(now)) + "</span>" : "") + "</span>" +
+      '<input type="text" inputmode="decimal" data-altarget value="' + esc(alerts.target) + '" placeholder="' + (now != null ? esc(num(now, alertDigits(now))) : "") + '"></label>' +
+      '<button type="button" class="refresh gate-go" data-aladd' + (alerts.busy ? " disabled" : "") + ">" + t({ ko: "추가", en: "Add" }) + "</button></div>" +
+      (alerts.msg ? '<p class="note warn">' + t(alerts.msg) + "</p>" : "") +
+      (rows ? '<ul class="he-list">' + rows + "</ul>" : alerts.rows ? '<p class="note">' + t({ ko: "아직 만든 알림이 없습니다.", en: "No alerts yet." }) + "</p>" : "") +
+      (!(push.on && pushSupported()) ? '<p class="note">' + t({ ko: "이 기기에서 받으려면 위의 '휴대폰 알림'을 켜 주세요.", en: "Turn on phone notifications above to get these on this device." }) + "</p>" : "") + "</section>";
+  }
   function notifView() {  // 설정 → 알림 화면
     var out = alertBox();
     if (push.on && pushSupported()) {
@@ -744,6 +887,7 @@
         t(c.quiet ? { ko: "켜짐", en: "On" } : { ko: "꺼짐", en: "Off" }) + "</button></span></li></ul>" +
         '<p class="note">' + t({ ko: "밤 시간에 나온 알림은 건너뜁니다(나중에 다시 보내지 않음). 시간은 이 기기의 시간대 기준입니다.", en: "Alerts that come out at night are skipped (not sent later). Times follow this device's time zone." }) + "</p></section>";
     }
+    out += alertsBox();
     if (serverOn() && auth.session) {
       mailLoad();
       out += '<section class="card alertbox"><div><h2>' + t({ ko: "주간 요약 이메일", en: "Weekly summary email" }) + '</h2><p class="sub">' +
@@ -813,6 +957,7 @@
     ["record", { ko: "우리 전망 vs 실제 결과", en: "Our calls vs. actual decisions" }, function () { return recordSection(); }],
     ["releases", { ko: "미국 주요 지표 발표", en: "Key US data releases" }, function () { return releaseSection(); }],
     ["fx", { ko: "주요 통화 환율", en: "Major currencies" }, function () { return fxSection(); }],
+    ["fomc", { ko: "연준 성명서 변화", en: "Fed statement changes" }, function () { return fomcDiffSection(); }],
     ["install", { ko: "휴대폰 홈 화면에 설치", en: "Add to your home screen" }, function () { return installBox(); }]
   ];
   function homeCfg() {
@@ -895,7 +1040,15 @@
       return miniCard("fx", { ko: "주요 통화 환율", en: "Major currencies" }, '<ul class="mini-rows fx">' + rows + "</ul>");
     }
   };
-  var CARD_FULL = { flash: function () { return flashSection(); }, weekly: function () { return weeklySection(); }, record: function () { return recordSection(); },
+  MINI.fomc = function () {
+    var d = data.fomc_diff;
+    if (!d || !d.items) return "";
+    var first = d.items.filter(function (x) { return x.op === "chg"; })[0];
+    return miniCard("fomc", { ko: "연준 성명서 변화", en: "Fed statement changes" },
+      '<p class="mini-line">' + t({ ko: "수정 " + d.n_chg + " · 추가 " + d.n_add + " · 삭제 " + d.n_del, en: d.n_chg + " changed · " + d.n_add + " added · " + d.n_del + " removed" }) + "</p>" +
+      (first ? '<p class="mini-quote" lang="en">' + fomcWords(first.words) + "</p>" : ""), mdS(d.date) + " vs " + mdS(d.prev_date));
+  };
+  var CARD_FULL = { fomc: function () { return fomcDiffSection(); }, flash: function () { return flashSection(); }, weekly: function () { return weeklySection(); }, record: function () { return recordSection(); },
                     releases: function () { return releaseSection(); }, fx: function () { return fxSection(); } };
   function cardView() {  // 첫 화면 카드의 전체 내용
     var f = CARD_FULL[view.card];
@@ -1148,7 +1301,7 @@
           ((pro && pro.au) || !pro ? item("assets", UI.tabAssets, "", true, { ko: "금·유가·S&P 500", en: "Gold, oil, S&P 500" }) : "") +
           ((pro && pro.kw) || !pro ? item("fxpro", UI.tabFx, "", true, { ko: "20개 통화 · 기준 통화 고르기", en: "20 currencies, pick any base" }) : "") : ""]
       ].filter(function (g) { return g[1]; });
-      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "card" ? ((HOME_CARDS.filter(function (x) { return x[0] === view.card; })[0] || [0, { ko: "전체", en: "Home" }])[1]) : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
+      var curName = view.tab === "all" ? UI.tabAll : view.tab === "countries" ? { ko: "나라별 금리", en: "Countries" } : view.tab === "proall" ? { ko: "PRO", en: "PRO" } : view.tab === "admin" ? { ko: "관리자", en: "Admin" } : view.tab === "sethome" ? { ko: "첫 화면 편집", en: "Edit home screen" } : view.tab === "account" ? { ko: "계정", en: "Account" } : view.tab === "card" ? ((HOME_CARDS.filter(function (x) { return x[0] === view.card; })[0] || [0, { ko: "전체", en: "Home" }])[1]) : view.tab === "setalert" ? { ko: "알림", en: "Notifications" } : view.tab === "overview" ? UI.tabOverview : view.tab === "calc" ? { ko: "내 돈 계산기", en: "Calculator" } :
         view.tab === "pro" ? UI.tabPro : view.tab === "assets" ? UI.tabAssets : view.tab === "fxpro" ? UI.tabFx :
         ((cl.filter(function (x) { return x.tab === view.tab; })[0] || {}).name || UI.tabOverview);
       var proTab = ["proall", "pro", "assets", "fxpro"].indexOf(view.tab) >= 0;  // PRO 메뉴 버튼을 보여 줄 화면
@@ -1175,6 +1328,7 @@
         (auth.admin ? '<div class="mn-group">' + item("admin", { ko: "관리자 · 회원 관리", en: "Admin · Members" }, "", false, { ko: "PRO 켜기·끄기, 가입자 목록", en: "Turn PRO on/off, member list" }) + "</div>" : "") +
         '<div class="mn-group"><div class="mn-h">' + t({ ko: "설정", en: "Settings" }) + "</div>" +
           item("sethome", { ko: "첫 화면 편집", en: "Edit home screen" }, "", false, { ko: "'전체' 화면에 보일 카드와 순서", en: "Which cards show on Home, and their order" }) +
+          (auth.session ? item("account", { ko: "계정", en: "Account" }, "", false, { ko: "로그인 정보 · 회원 탈퇴", en: "Sign-in details, delete account" }) : "") +
           (alertsAvail() ? item("setalert", { ko: "알림", en: "Notifications" }, "", false, { ko: "휴대폰 알림·받을 항목·주간 이메일", en: "Phone alerts, what to receive, weekly email" }) : "") + 
           '<button type="button" class="mn-item mn-langtoggle" data-langtoggle aria-expanded="false" aria-controls="mn-langlist">' +
           '<span class="mn-l"><span class="mn-nm">Languages · ' + t({ ko: "언어", en: "Language", zh: "语言", ja: "言語", es: "Idioma", fr: "Langue", de: "Sprache", nl: "Taal" }) + "</span></span>" +
@@ -2882,6 +3036,8 @@
       body = f ? folderDetail(f) : proOverview();
     } else if (view.tab === "proall" && pro) {
       body = proAllView();
+    } else if (view.tab === "account") {
+      body = accountView();
     } else if (view.tab === "card") {
       body = cardView();
     } else if (view.tab === "sethome") {
@@ -3192,6 +3348,12 @@
   }
   app.addEventListener("input", onCalcInput);
   app.addEventListener("change", onCalcInput);
+  app.addEventListener("change", function (e) {  // 목표가 알림 입력칸
+    if (!e.target.closest) return;
+    var ti = app.querySelector("[data-altarget]");
+    if (e.target.closest("[data-alitem]")) { if (ti) alerts.target = ""; alerts.item = e.target.value; render(); }
+    else if (e.target.closest("[data-alop]")) { if (ti) alerts.target = ti.value; alerts.op = e.target.value; render(); }
+  });
   app.addEventListener("change", function (e) {  // 환율 폴더: 기준·상대 통화 고르기 (같은 통화를 고르면 서로 맞바꾼다)
     var sel = e.target.closest && e.target.closest("[data-fxsel]");
     if (!sel) return;
@@ -3319,7 +3481,7 @@
     var ab0 = e.target.closest("[data-auth]");
     if (ab0) {
       var act = ab0.dataset.auth;
-      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.admin = false; admin.rows = null; mail.on = null; mail.msg = null; if (view.tab === "admin") view.tab = "all"; auth.nodata = false; auth.step = "signin"; render(); }
+      if (act === "logout") { document.documentElement.classList.remove("mn-open"); menuOpen = null; saveSession(null); pro = null; auth.member = null; auth.admin = false; admin.rows = null; mail.on = null; mail.msg = null; alerts.rows = null; if (view.tab === "admin") view.tab = "all"; auth.nodata = false; auth.step = "signin"; render(); }
       else if (act === "tosignup") { auth.step = "signup"; auth.msg = null; render(); }
       else if (act === "toforgot") { auth.step = "forgot"; auth.msg = null; auth.msgOk = false; render(); scrollTo(0, 0); }
       else if (act === "tosignin") { auth.step = "signin"; auth.msg = null; auth.msgOk = false; render(); }
@@ -3329,6 +3491,13 @@
     if (e.target.closest("[data-share]")) { shareSheet(); return; }
     if (e.target.closest("[data-push]")) { pushToggle(); return; }
     if (e.target.closest("[data-mail]")) { mailToggle(); return; }
+    if (e.target.closest("[data-delok]")) { del.ok = e.target.closest("[data-delok]").checked; render(); return; }
+    if (e.target.closest("[data-delgo]")) { deleteAccount(); return; }
+    if (e.target.closest("[data-aladd]")) { var ti = app.querySelector("[data-altarget]"); if (ti) alerts.target = ti.value; alertAdd(); return; }
+    var ald = e.target.closest("[data-aldel]");
+    if (ald) { alertsCall("/rest/v1/price_alerts?id=eq." + ald.dataset.aldel, { method: "DELETE" }); return; }
+    var alr = e.target.closest("[data-alrearm]");
+    if (alr) { alertsCall("/rest/v1/price_alerts?id=eq." + alr.dataset.alrearm, { method: "PATCH", body: { fired_at: null, fired_value: null } }); return; }
     var cdb0 = e.target.closest("[data-card]");
     if (cdb0) { view.card = cdb0.dataset.card; view.tab = "card"; view.folder = null; render(); scrollTo(0, 0); return; }
     var nkb = e.target.closest("[data-nk]");
